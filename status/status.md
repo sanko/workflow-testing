@@ -1,34 +1,41 @@
 ## Build and Test Summary
-| OS | Arch | Compiler | Result |
-|:---|:---|:---|:---|
-| **dragonflybsd** | `x86_64` | `gcc` | ✅ success |
-| **freebsd** | `aarch64` | `clang` | ✅ success |
-| **freebsd** | `aarch64` | `gcc` | ✅ success |
-| **freebsd** | `x86_64` | `clang` | ✅ success |
-| **freebsd** | `x86_64` | `gcc` | ✅ success |
-| **macos** | `aarch64` | `clang` | ✅ success |
-| **macos** | `aarch64` | `gcc` | ✅ success |
-| **macos** | `x86_64` | `clang` | ✅ success |
-| **macos** | `x86_64` | `gcc` | ✅ success |
-| **netbsd** | `aarch64` | `gcc` | ✅ success |
-| **netbsd** | `x86_64` | `gcc` | ✅ success |
-| **omnios** | `x86_64` | `gcc` | ✅ success |
-| **openbsd** | `aarch64` | `clang` | ✅ success |
-| **openbsd** | `aarch64` | `egcc` | ✅ success |
-| **openbsd** | `riscv64` | `clang` | ✅ success |
-| **openbsd** | `riscv64` | `egcc` | ✅ success |
-| **openbsd** | `x86_64` | `clang` | ✅ success |
-| **openbsd** | `x86_64` | `egcc` | ✅ success |
-| **solaris** | `x86_64` | `gcc` | ✅ success |
-| **ubuntu** | `aarch64` | `clang` | ✅ success |
-| **ubuntu** | `aarch64` | `gcc` | ✅ success |
-| **ubuntu** | `riscv64` | `clang` | ✅ success |
-| **ubuntu** | `riscv64` | `gcc` | ✅ success |
-| **ubuntu** | `x86_64` | `clang` | ✅ success |
-| **ubuntu** | `x86_64` | `gcc` | ✅ success |
-| **windows** | `aarch64` | `clang` | ✅ success |
-| **windows** | `aarch64` | `gcc` | ✅ success |
-| **windows** | `aarch64` | `msvc` | ✅ success |
-| **windows** | `x86_64` | `clang` | ✅ success |
-| **windows** | `x86_64` | `gcc` | ✅ success |
-| **windows** | `x86_64` | `msvc` | ✅ success |
+### Linux
+- `a64-clang-v5.38-success` :x:
+- `a64-gcc-v5.38-success` :x:
+- `r64-clang-v5.38-success` :x:
+- `r64-gcc-v5.38-success` :x:
+- `x64-clang-v5.38-success` :x:
+- `x64-gcc-v5.38-success` :x:
+### macOS
+- `a64-clang-v5.42-success` :x:
+- `a64-gcc-v5.42-success` :x:
+- `x64-clang-v5.42-success` :x:
+- `x64-gcc-v5.42-success` :x:
+### Windows
+- `a64-clang-v5.42-success` :x:
+- `a64-gcc-v5.42-success` :x:
+- `a64-msvc-v5.42-success` :x:
+- `x64-clang-v5.42-success` :x:
+- `x64-gcc-v5.42-success` :x:
+- `x64-msvc-v5.42-success` :x:
+### FreeBSD
+- `a64-clang-v5.42-success` :x:
+- `a64-gcc-v5.42-success` :x:
+- `x64-clang-v5.42-success` :x:
+- `x64-gcc-v5.42-success` :x:
+### OpenBSD
+- `a64-clang-v5.40-success` :x:
+- `a64-egcc-v5.40-success` :x:
+- `r64-clang-v5.40-success` :x:
+- `r64-egcc-v5.40-success` :x:
+- `x64-clang-v5.40-success` :x:
+- `x64-egcc-v5.40-success` :x:
+### NetBSD
+- `a64-gcc-v5.42-success` :x:
+- `x64-gcc-v5.42-success` :x:
+### DragonFly BSD
+- `x64-gcc-v5.36-success` :x:
+### Solaris
+- `x64-gcc-v5.38-success` :x:
+### OmniOS
+- `x64-gcc-v5.42-success` :x:

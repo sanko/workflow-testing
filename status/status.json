@@ -1,63 +1,63 @@
 {
-"dragonflybsd-x86_64-gcc": "👍🏽 passing"
+"aarch64--clang": "👎🏽 failing"
 ,
-"freebsd-aarch64-clang": "👍🏽 passing"
+"aarch64--gcc": "👎🏽 failing"
 ,
-"freebsd-aarch64-gcc": "👍🏽 passing"
+"riscv64--clang": "👎🏽 failing"
 ,
-"freebsd-x86_64-clang": "👍🏽 passing"
+"riscv64--gcc": "👎🏽 failing"
 ,
-"freebsd-x86_64-gcc": "👍🏽 passing"
+"x86_64--clang": "👎🏽 failing"
 ,
-"macos-aarch64-clang": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 ,
-"macos-aarch64-gcc": "👍🏽 passing"
+"aarch64--clang": "👎🏽 failing"
 ,
-"macos-x86_64-clang": "👍🏽 passing"
+"aarch64--gcc": "👎🏽 failing"
 ,
-"macos-x86_64-gcc": "👍🏽 passing"
+"x86_64--clang": "👎🏽 failing"
 ,
-"netbsd-aarch64-gcc": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 ,
-"netbsd-x86_64-gcc": "👍🏽 passing"
+"aarch64--clang": "👎🏽 failing"
 ,
-"omnios-x86_64-gcc": "👍🏽 passing"
+"aarch64--gcc": "👎🏽 failing"
 ,
-"openbsd-aarch64-clang": "👍🏽 passing"
+"aarch64--msvc": "👎🏽 failing"
 ,
-"openbsd-aarch64-egcc": "👍🏽 passing"
+"x86_64--clang": "👎🏽 failing"
 ,
-"openbsd-riscv64-clang": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 ,
-"openbsd-riscv64-egcc": "👍🏽 passing"
+"x86_64--msvc": "👎🏽 failing"
 ,
-"openbsd-x86_64-clang": "👍🏽 passing"
+"aarch64--clang": "👎🏽 failing"
 ,
-"openbsd-x86_64-egcc": "👍🏽 passing"
+"aarch64--gcc": "👎🏽 failing"
 ,
-"solaris-x86_64-gcc": "👍🏽 passing"
+"x86_64--clang": "👎🏽 failing"
 ,
-"ubuntu-aarch64-clang": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 ,
-"ubuntu-aarch64-gcc": "👍🏽 passing"
+"aarch64--clang": "👎🏽 failing"
 ,
-"ubuntu-riscv64-clang": "👍🏽 passing"
+"aarch64--egcc": "👎🏽 failing"
 ,
-"ubuntu-riscv64-gcc": "👍🏽 passing"
+"riscv64--clang": "👎🏽 failing"
 ,
-"ubuntu-x86_64-clang": "👍🏽 passing"
+"riscv64--egcc": "👎🏽 failing"
 ,
-"ubuntu-x86_64-gcc": "👍🏽 passing"
+"x86_64--clang": "👎🏽 failing"
 ,
-"windows-aarch64-clang": "👍🏽 passing"
+"x86_64--egcc": "👎🏽 failing"
 ,
-"windows-aarch64-gcc": "👍🏽 passing"
+"aarch64--gcc": "👎🏽 failing"
 ,
-"windows-aarch64-msvc": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 ,
-"windows-x86_64-clang": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 ,
-"windows-x86_64-gcc": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 ,
-"windows-x86_64-msvc": "👍🏽 passing"
+"x86_64--gcc": "👎🏽 failing"
 }
