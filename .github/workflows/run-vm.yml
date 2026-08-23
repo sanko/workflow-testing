@@ -10,7 +10,8 @@ on:
         description: >
           JSON array of setups for this OS family. Item fields:
           platform_name (required), os (required), arch (required),
-          toolchain, prepare, variant. The os selects the VM image.
+          toolchain, prepare, variant, perl_version, configure. The os
+          selects the VM image.
         required: true
         type: string
       os_version:
@@ -43,6 +44,42 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
 
+      #~ Written on the host, sourced inside the VM run blocks below (local
+      #~ composite actions cannot be used cross-repo, so this is a file).
+      - name: Write perl build helper
+        shell: bash
+        run: |
+          cat > .ci-build-perl.sh <<'EOF'
+          #~ Fetch, configure, build and install perl into ./perl-dist.
+          #~ Usage: ci_build_perl <full-version> [extra ./Configure flags...]
+          ci_build_perl() {
+            ver="$1"; shift
+            prefix="$(pwd)/perl-dist"
+            url="https://www.cpan.org/src/5.0/perl-${ver}.tar.gz"
+            echo "Fetching ${url}"
+            (
+              set -e
+              if command -v curl >/dev/null 2>&1; then
+                curl -fL --retry 3 -o perl.tar.gz "${url}"
+              elif command -v wget >/dev/null 2>&1; then
+                wget -qO perl.tar.gz "${url}"
+              elif command -v fetch >/dev/null 2>&1; then
+                fetch -o perl.tar.gz "${url}"
+              else
+                ftp -o perl.tar.gz "${url}"
+              fi
+              rm -rf "perl-${ver}"
+              gzip -dc perl.tar.gz | tar -xf -
+              cd "perl-${ver}"
+              MAKE=make
+              command -v gmake >/dev/null 2>&1 && MAKE=gmake
+              sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none "$@"
+              "${MAKE}" -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+              "${MAKE}" install
+            )
+          }
+          EOF
+
       - name: Build and Test in FreeBSD
         if: matrix.os == 'freebsd'
         uses: vmactions/freebsd-vm@v1.5.2
@@ -52,8 +89,14 @@ jobs:
           arch: ${{ matrix.arch }}
           prepare: ${{ matrix.prepare }}
           run: |
-            #~ Capture the perl version inside the VM; the shared workspace
-            #~ syncs this file back to the host for the info step.
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              . ./.ci-build-perl.sh
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
             ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
@@ -66,6 +109,14 @@ jobs:
           arch: ${{ matrix.arch }}
           prepare: ${{ matrix.prepare }}
           run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              . ./.ci-build-perl.sh
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
             ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
@@ -78,6 +129,14 @@ jobs:
           arch: ${{ matrix.arch }}
           prepare: ${{ matrix.prepare }}
           run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              . ./.ci-build-perl.sh
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
             ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
@@ -90,6 +149,14 @@ jobs:
           arch: ${{ matrix.arch }}
           prepare: ${{ matrix.prepare }}
           run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              . ./.ci-build-perl.sh
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
             ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
@@ -102,6 +169,14 @@ jobs:
           arch: ${{ matrix.arch }}
           prepare: ${{ matrix.prepare }}
           run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              . ./.ci-build-perl.sh
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
             ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
@@ -114,6 +189,14 @@ jobs:
           arch: ${{ matrix.arch }}
           prepare: ${{ matrix.prepare }}
           run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              . ./.ci-build-perl.sh
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
             ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 

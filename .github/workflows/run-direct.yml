@@ -10,7 +10,7 @@ on:
         description: >
           JSON array of setups for this OS family. Item fields:
           platform_name (required), os (required), arch (required),
-          toolchain, prepare, variant.
+          toolchain, prepare, variant, perl_version, configure.
         required: true
         type: string
       task:
@@ -45,6 +45,34 @@ jobs:
         if: matrix.prepare != ''
         shell: bash
         run: ${{ matrix.prepare }}
+
+      - name: Build perl from source
+        if: matrix.perl_version != ''
+        shell: bash
+        run: |
+          set -e
+          ver="${{ matrix.perl_version }}"
+          prefix="$(pwd)/perl-dist"
+          url="https://www.cpan.org/src/5.0/perl-${ver}.tar.gz"
+          echo "Fetching ${url}"
+          if command -v curl >/dev/null 2>&1; then
+            curl -fL --retry 3 -o perl.tar.gz "${url}"
+          elif command -v wget >/dev/null 2>&1; then
+            wget -qO perl.tar.gz "${url}"
+          else
+            echo "curl or wget is required to download perl ${ver}" >&2
+            exit 1
+          fi
+          rm -rf "perl-${ver}"
+          gzip -dc perl.tar.gz | tar -xf -
+          cd "perl-${ver}"
+          MAKE=make
+          command -v gmake >/dev/null 2>&1 && MAKE=gmake
+          sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none ${{ matrix.configure }}
+          "${MAKE}" -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+          "${MAKE}" install
+          #~ Subsequent steps (task + info) resolve `perl` to the fresh build.
+          echo "${prefix}/bin" >> "$GITHUB_PATH"
 
       - name: Run task
         shell: bash
