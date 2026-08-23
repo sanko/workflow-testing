@@ -22,7 +22,7 @@ on:
 
 jobs:
   run:
-    name: ${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+    name: ${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -30,7 +30,7 @@ jobs:
         include: ${{ fromJSON(inputs.matrix) }}
     env:
       #~ Unique base name for this setup's result files
-      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
@@ -46,11 +46,36 @@ jobs:
         shell: bash
         run: ${{ matrix.prepare }}
 
+      #~ Strict cache key: every component that changes the produced binary
+      #~ is in the key, so a hit always means "this exact perl". No loose
+      #~ restore-keys — restoring a differently-configured build would be
+      #~ worse than rebuilding.
+      - name: Compute perl cache key
+        if: matrix.perl_version != ''
+        id: perlcache
+        shell: bash
+        run: |
+          flags="${{ matrix.configure }}"
+          flags="${flags// /_}"; flags="${flags//-/}"
+          echo "suffix=${{ matrix.perl_version }}-${flags}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache source-built perl
+        if: matrix.perl_version != ''
+        uses: actions/cache@v6.1.0
+        with:
+          path: perl-dist
+          key: perl-dist-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.toolchain }}-${{ steps.perlcache.outputs.suffix }}
+
       - name: Build perl from source
         if: matrix.perl_version != ''
         shell: bash
         run: |
           set -e
+          if [ -x "$(pwd)/perl-dist/bin/perl" ]; then
+            echo "Using cached source-built perl from perl-dist"
+            echo "$(pwd)/perl-dist/bin" >> "$GITHUB_PATH"
+            exit 0
+          fi
           ver="${{ matrix.perl_version }}"
           prefix="$(pwd)/perl-dist"
           url="https://www.cpan.org/src/5.0/perl-${ver}.tar.gz"
@@ -105,7 +130,7 @@ jobs:
           esac
           pver="$(perl -e 'printf "%vd", $^V' 2>/dev/null || true)"
           if [ -n "$pver" ]; then
-            pver="v$(echo "$pver" | cut -d. -f1-2)"
+            pver="v$pver"
           fi
           echo "family=$family" >> "$GITHUB_OUTPUT"
           echo "arch_short=$ashort" >> "$GITHUB_OUTPUT"

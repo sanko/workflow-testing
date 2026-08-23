@@ -31,7 +31,7 @@ on:
 
 jobs:
   run:
-    name: ${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+    name: ${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     runs-on: ${{ inputs.host_os || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -39,10 +39,31 @@ jobs:
         include: ${{ fromJSON(inputs.matrix) }}
     env:
       #~ Unique base name for this setup's result files
-      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
+
+      #~ Strict cache key: every component that changes the produced binary
+      #~ is in the key, so a hit always means "this exact perl". No loose
+      #~ restore-keys — restoring a differently-configured build would be
+      #~ worse than rebuilding. The VM syncs perl-dist in before its run
+      #~ blocks and back out afterwards, so host-side caching just works.
+      - name: Compute perl cache key
+        if: matrix.perl_version != ''
+        id: perlcache
+        shell: bash
+        run: |
+          flags="${{ matrix.configure }}"
+          flags="${flags// /_}"; flags="${flags//-/}"
+          echo "suffix=${{ matrix.perl_version }}-${flags}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache source-built perl
+        if: matrix.perl_version != ''
+        uses: actions/cache@v6.1.0
+        with:
+          path: perl-dist
+          key: perl-dist-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.toolchain }}-${{ steps.perlcache.outputs.suffix }}
 
       #~ Written on the host, sourced inside the VM run blocks below (local
       #~ composite actions cannot be used cross-repo, so this is a file).
@@ -94,12 +115,16 @@ jobs:
             #~ Build perl from source when the setup requests it. The shared
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
-              . ./.ci-build-perl.sh
-              #~ Plain call + explicit status check: invoking the function
-              #~ inside `||`/`if` would suppress errexit inside it.
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
-              status=$?
-              [ "$status" -eq 0 ] || exit 1
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -118,12 +143,16 @@ jobs:
             #~ Build perl from source when the setup requests it. The shared
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
-              . ./.ci-build-perl.sh
-              #~ Plain call + explicit status check: invoking the function
-              #~ inside `||`/`if` would suppress errexit inside it.
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
-              status=$?
-              [ "$status" -eq 0 ] || exit 1
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -142,12 +171,16 @@ jobs:
             #~ Build perl from source when the setup requests it. The shared
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
-              . ./.ci-build-perl.sh
-              #~ Plain call + explicit status check: invoking the function
-              #~ inside `||`/`if` would suppress errexit inside it.
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
-              status=$?
-              [ "$status" -eq 0 ] || exit 1
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -166,12 +199,16 @@ jobs:
             #~ Build perl from source when the setup requests it. The shared
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
-              . ./.ci-build-perl.sh
-              #~ Plain call + explicit status check: invoking the function
-              #~ inside `||`/`if` would suppress errexit inside it.
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
-              status=$?
-              [ "$status" -eq 0 ] || exit 1
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -190,12 +227,16 @@ jobs:
             #~ Build perl from source when the setup requests it. The shared
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
-              . ./.ci-build-perl.sh
-              #~ Plain call + explicit status check: invoking the function
-              #~ inside `||`/`if` would suppress errexit inside it.
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
-              status=$?
-              [ "$status" -eq 0 ] || exit 1
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -214,12 +255,16 @@ jobs:
             #~ Build perl from source when the setup requests it. The shared
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
-              . ./.ci-build-perl.sh
-              #~ Plain call + explicit status check: invoking the function
-              #~ inside `||`/`if` would suppress errexit inside it.
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
-              status=$?
-              [ "$status" -eq 0 ] || exit 1
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -264,7 +309,7 @@ jobs:
             pver="$(perl -e 'printf "%vd", $^V' 2>/dev/null || true)"
           fi
           if [ -n "$pver" ]; then
-            pver="v$(echo "$pver" | cut -d. -f1-2)"
+            pver="v$pver"
           fi
           echo "family=$family" >> "$GITHUB_OUTPUT"
           echo "arch_short=$ashort" >> "$GITHUB_OUTPUT"
