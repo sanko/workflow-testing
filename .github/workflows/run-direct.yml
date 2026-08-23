@@ -71,6 +71,8 @@ jobs:
           sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none ${{ matrix.configure }}
           "${MAKE}" -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
           "${MAKE}" install
+          #~ Sentinel: never report success without a built perl binary.
+          [ -x "${prefix}/bin/perl" ]
           #~ Subsequent steps (task + info) resolve `perl` to the fresh build.
           echo "${prefix}/bin" >> "$GITHUB_PATH"
 

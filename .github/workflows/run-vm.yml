@@ -76,6 +76,8 @@ jobs:
               sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none "$@"
               "${MAKE}" -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
               "${MAKE}" install
+              #~ Sentinel: never report success without a built perl binary.
+              [ -x "${prefix}/bin/perl" ]
             )
           }
           EOF
@@ -93,7 +95,11 @@ jobs:
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
               . ./.ci-build-perl.sh
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              #~ Plain call + explicit status check: invoking the function
+              #~ inside `||`/`if` would suppress errexit inside it.
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+              status=$?
+              [ "$status" -eq 0 ] || exit 1
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -113,7 +119,11 @@ jobs:
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
               . ./.ci-build-perl.sh
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              #~ Plain call + explicit status check: invoking the function
+              #~ inside `||`/`if` would suppress errexit inside it.
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+              status=$?
+              [ "$status" -eq 0 ] || exit 1
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -133,7 +143,11 @@ jobs:
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
               . ./.ci-build-perl.sh
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              #~ Plain call + explicit status check: invoking the function
+              #~ inside `||`/`if` would suppress errexit inside it.
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+              status=$?
+              [ "$status" -eq 0 ] || exit 1
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -153,7 +167,11 @@ jobs:
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
               . ./.ci-build-perl.sh
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              #~ Plain call + explicit status check: invoking the function
+              #~ inside `||`/`if` would suppress errexit inside it.
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+              status=$?
+              [ "$status" -eq 0 ] || exit 1
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -173,7 +191,11 @@ jobs:
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
               . ./.ci-build-perl.sh
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              #~ Plain call + explicit status check: invoking the function
+              #~ inside `||`/`if` would suppress errexit inside it.
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+              status=$?
+              [ "$status" -eq 0 ] || exit 1
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
@@ -193,7 +215,11 @@ jobs:
             #~ workspace syncs .perl-version back to the host info step.
             if [ -n '${{ matrix.perl_version }}' ]; then
               . ./.ci-build-perl.sh
-              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }} || exit 1
+              #~ Plain call + explicit status check: invoking the function
+              #~ inside `||`/`if` would suppress errexit inside it.
+              ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+              status=$?
+              [ "$status" -eq 0 ] || exit 1
               PATH="$(pwd)/perl-dist/bin:$PATH"
             fi
             #~ Capture the perl version inside the VM for the host info step.
