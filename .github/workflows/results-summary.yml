@@ -48,8 +48,13 @@ jobs:
           #~ status, platform, arch
           flat="$(mktemp)"
           trap 'rm -f "$flat"' EXIT
+          #~ Empty fields become '-': plain TSV reads collapse runs of tabs,
+          #~ which would silently shift every following column.
           for f in results/*.json; do
-            jq -r '[.family,.arch_short,.toolchain,(.perl//""),(.variant//""),.status,.platform,.arch] | @tsv' "$f" >> "$flat"
+            jq -r '[(.family//"-"),(.arch_short//"-"),(.toolchain//"-"),
+                    ((.perl//"")|if .=="" then "-" else . end),
+                    ((.variant//"")|if .=="" then "-" else . end),
+                    (.status//"-"),(.platform//"-"),(.arch//"-")] | @tsv' "$f" >> "$flat"
           done
 
           order=("Linux" "macOS" "Windows" "FreeBSD" "OpenBSD" "NetBSD" "DragonFly BSD" "Solaris" "OmniOS")
@@ -71,6 +76,8 @@ jobs:
             #~ Process substitution (not a pipe) keeps the loop in this shell,
             #~ so the JSON comma bookkeeping below works.
             while IFS=$'\t' read -r family ashort toolchain pver variant st plat arch; do
+              [ "$pver" = "-" ] && pver=""
+              [ "$variant" = "-" ] && variant=""
               cfg="$ashort-$toolchain"
               if [ "$multi_perl" -gt 1 ] && [ -n "$pver" ]; then
                 cfg="$cfg-$pver"
