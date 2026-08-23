@@ -28,6 +28,11 @@ on:
       toolchain:
         required: true
         type: string
+      variant:
+        description: >
+          Optional build-flavor label (e.g. longdoubles) shown in summaries.
+        required: false
+        type: string
       task:
         description: >
           Command(s) to execute inside the VM. Defaults to the standard
@@ -54,7 +59,11 @@ jobs:
           usesh: true
           arch: ${{ inputs.arch }}
           prepare: ${{ inputs.prepare }}
-          run: ${{ env.TASK }}
+          run: |
+            #~ Capture the perl version inside the VM; the shared workspace
+            #~ syncs this file back to the host for the info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            ${{ env.TASK }}
 
       - name: Build and Test in OpenBSD
         if: inputs.os == 'openbsd'
@@ -64,7 +73,11 @@ jobs:
           usesh: true
           arch: ${{ inputs.arch }}
           prepare: ${{ inputs.prepare }}
-          run: ${{ env.TASK }}
+          run: |
+            #~ Capture the perl version inside the VM; the shared workspace
+            #~ syncs this file back to the host for the info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            ${{ env.TASK }}
 
       - name: Build and Test in NetBSD
         if: inputs.os == 'netbsd'
@@ -74,7 +87,11 @@ jobs:
           usesh: true
           arch: ${{ inputs.arch }}
           prepare: ${{ inputs.prepare }}
-          run: ${{ env.TASK }}
+          run: |
+            #~ Capture the perl version inside the VM; the shared workspace
+            #~ syncs this file back to the host for the info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            ${{ env.TASK }}
 
       - name: Build and Test in DragonflyBSD
         if: inputs.os == 'dragonflybsd'
@@ -84,7 +101,11 @@ jobs:
           usesh: true
           arch: ${{ inputs.arch }}
           prepare: ${{ inputs.prepare }}
-          run: ${{ env.TASK }}
+          run: |
+            #~ Capture the perl version inside the VM; the shared workspace
+            #~ syncs this file back to the host for the info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            ${{ env.TASK }}
 
       - name: Build and Test in Solaris
         if: inputs.os == 'solaris'
@@ -94,7 +115,11 @@ jobs:
           usesh: true
           arch: ${{ inputs.arch }}
           prepare: ${{ inputs.prepare }}
-          run: ${{ env.TASK }}
+          run: |
+            #~ Capture the perl version inside the VM; the shared workspace
+            #~ syncs this file back to the host for the info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            ${{ env.TASK }}
 
       - name: Build and Test in OmniOS
         if: inputs.os == 'omnios'
@@ -104,7 +129,11 @@ jobs:
           usesh: true
           arch: ${{ inputs.arch }}
           prepare: ${{ inputs.prepare }}
-          run: ${{ env.TASK }}
+          run: |
+            #~ Capture the perl version inside the VM; the shared workspace
+            #~ syncs this file back to the host for the info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            ${{ env.TASK }}
 
       #~ - name: Upload coverage reports to Codecov
         #~ uses: codecov/codecov-action@v5
@@ -115,17 +144,70 @@ jobs:
           #~ name: ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}
           #~ verbose: true
 
+      - name: Collect environment info
+        if: always()
+        id: info
+        shell: bash
+        run: |
+          case "${{ inputs.os }}" in
+            ubuntu*)       family='Linux' ;;
+            macos*)        family='macOS' ;;
+            windows*)      family='Windows' ;;
+            freebsd)       family='FreeBSD' ;;
+            openbsd)       family='OpenBSD' ;;
+            netbsd)        family='NetBSD' ;;
+            dragonflybsd)  family='DragonFly BSD' ;;
+            solaris)       family='Solaris' ;;
+            omnios)        family='OmniOS' ;;
+            *)             family="${{ inputs.os }}" ;;
+          esac
+          case "${{ inputs.arch }}" in
+            x86_64|amd64)  ashort='x64' ;;
+            aarch64|arm64) ashort='a64' ;;
+            riscv64)       ashort='r64' ;;
+            *)             ashort="${{ inputs.arch }}" ;;
+          esac
+          #~ .perl-version is written inside the VM (see the run steps above);
+          #~ fall back to a host perl for anything else.
+          if [ -f .perl-version ]; then
+            pver="$(cat .perl-version)"
+            rm -f .perl-version
+          else
+            pver="$(perl -e 'printf "%vd", $^V' 2>/dev/null || true)"
+          fi
+          if [ -n "$pver" ]; then
+            pver="v$(echo "$pver" | cut -d. -f1-2)"
+          fi
+          echo "family=$family" >> "$GITHUB_OUTPUT"
+          echo "arch_short=$ashort" >> "$GITHUB_OUTPUT"
+          echo "perl=$pver" >> "$GITHUB_OUTPUT"
+
       #~ Local composite actions resolve against the caller repo when this
       #~ workflow is invoked cross-repo, so these steps stay inlined.
-      - name: Record build status
+      - name: Record build status and metadata
         if: always()
         shell: bash
-        run: echo '${{ job.status }}' > '${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result'
+        run: |
+          fname='${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}'
+          echo '${{ job.status }}' > "$fname.result"
+          jq -n \
+            --arg status '${{ job.status }}' \
+            --arg platform '${{ inputs.platform_name }}' \
+            --arg family '${{ steps.info.outputs.family }}' \
+            --arg arch '${{ inputs.arch }}' \
+            --arg ashort '${{ steps.info.outputs.arch_short }}' \
+            --arg toolchain '${{ inputs.toolchain }}' \
+            --arg perl '${{ steps.info.outputs.perl }}' \
+            --arg variant '${{ inputs.variant }}' \
+            '{status:$status,platform:$platform,family:$family,arch:$arch,arch_short:$ashort,toolchain:$toolchain,perl:$perl,variant:$variant}' \
+            > "$fname.json"
 
       - name: Upload build status artifact
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: result-artifact-${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}
-          path: ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result
+          path: |
+            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result
+            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.json
           retention-days: 1

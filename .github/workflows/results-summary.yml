@@ -1,0 +1,104 @@
+name: Results Summary
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  workflow_call:
+    inputs:
+      title:
+        description: 'Heading for the generated summary'
+        required: false
+        type: string
+        default: 'Build and Test Summary'
+
+jobs:
+  summarize:
+    name: Summary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all result artifacts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: result-artifact-*
+          path: results/
+          merge-multiple: true
+
+      - name: Generate grouped summary
+        shell: bash
+        run: |
+          mkdir -p status
+          SUMMARY_MD="status/status.md"
+          STATUS_JSON="status/status.json"
+          echo "## ${{ inputs.title }}" > "$SUMMARY_MD"
+
+          if ! compgen -G "results/*.json" > /dev/null; then
+            echo "_No result data found._ :x:" >> "$SUMMARY_MD"
+            printf '{\n}\n' > "$STATUS_JSON"
+            cat "$SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          #~ The perl version suffix only appears when more than one distinct
+          #~ perl version was seen across all entries.
+          multi_perl="$(jq -r '.perl // ""' results/*.json | sed '/^$/d' | sort -u | wc -l)"
+
+          #~ Flatten metadata: family, arch_short, toolchain, perl, variant,
+          #~ status, platform, arch
+          flat="$(mktemp)"
+          trap 'rm -f "$flat"' EXIT
+          for f in results/*.json; do
+            jq -r '[.family,.arch_short,.toolchain,(.perl//""),(.variant//""),.status,.platform,.arch] | @tsv' "$f" >> "$flat"
+          done
+
+          order=("Linux" "macOS" "Windows" "FreeBSD" "OpenBSD" "NetBSD" "DragonFly BSD" "Solaris" "OmniOS")
+          #~ Append unanticipated families alphabetically
+          while IFS= read -r fam; do
+            known=false
+            for k in "${order[@]}"; do
+              [ "$k" = "$fam" ] && known=true
+            done
+            $known || order+=("$fam")
+          done < <(cut -f1 "$flat" | sort -u)
+
+          first=true
+          echo '{' > "$STATUS_JSON"
+          for fam in "${order[@]}"; do
+            rows="$(awk -F'\t' -v fam="$fam" '$1==fam' "$flat")"
+            [ -z "$rows" ] && continue
+            echo "### $fam" >> "$SUMMARY_MD"
+            #~ Process substitution (not a pipe) keeps the loop in this shell,
+            #~ so the JSON comma bookkeeping below works.
+            while IFS=$'\t' read -r family ashort toolchain pver variant st plat arch; do
+              cfg="$ashort-$toolchain"
+              if [ "$multi_perl" -gt 1 ] && [ -n "$pver" ]; then
+                cfg="$cfg-$pver"
+              fi
+              if [ -n "$variant" ]; then
+                cfg="$cfg-$variant"
+              fi
+              if [ "$st" = "success" ]; then
+                icon=':white_check_mark:'
+                shield='👍🏽 passing'
+              else
+                icon=':x:'
+                shield='👎🏽 failing'
+              fi
+              echo "- \`$cfg\` $icon" >> "$SUMMARY_MD"
+              if [ "$first" = false ]; then
+                echo ',' >> "$STATUS_JSON"
+              fi
+              echo "\"${plat}-${arch}-${toolchain}\": \"$shield\"" >> "$STATUS_JSON"
+              first=false
+            done < <(sort -t$'\t' -k2,2 -k3,3 -k4,4 -k5,5 <<<"$rows")
+          done
+          echo '}' >> "$STATUS_JSON"
+
+          cat "$SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload status files
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: status-files
+          path: status/

@@ -21,6 +21,11 @@ on:
       toolchain:
         required: true
         type: string
+      variant:
+        description: >
+          Optional build-flavor label (e.g. longdoubles) shown in summaries.
+        required: false
+        type: string
       task:
         description: >
           Command(s) to execute on the runner. Defaults to the standard
@@ -54,17 +59,70 @@ jobs:
         shell: bash
         run: ${{ env.TASK }}
 
+      - name: Collect environment info
+        if: always()
+        id: info
+        shell: bash
+        run: |
+          case "${{ inputs.os }}" in
+            ubuntu*)       family='Linux' ;;
+            macos*)        family='macOS' ;;
+            windows*)      family='Windows' ;;
+            freebsd)       family='FreeBSD' ;;
+            openbsd)       family='OpenBSD' ;;
+            netbsd)        family='NetBSD' ;;
+            dragonflybsd)  family='DragonFly BSD' ;;
+            solaris)       family='Solaris' ;;
+            omnios)        family='OmniOS' ;;
+            *)             family="${{ inputs.os }}" ;;
+          esac
+          case "${{ inputs.arch }}" in
+            x86_64|amd64)  ashort='x64' ;;
+            aarch64|arm64) ashort='a64' ;;
+            riscv64)       ashort='r64' ;;
+            *)             ashort="${{ inputs.arch }}" ;;
+          esac
+          #~ Prefer the version captured inside a VM (see run-vm.yml); fall back
+          #~ to the perl on PATH for direct runners.
+          if [ -f .perl-version ]; then
+            pver="$(cat .perl-version)"
+            rm -f .perl-version
+          else
+            pver="$(perl -e 'printf "%vd", $^V' 2>/dev/null || true)"
+          fi
+          if [ -n "$pver" ]; then
+            pver="v$(echo "$pver" | cut -d. -f1-2)"
+          fi
+          echo "family=$family" >> "$GITHUB_OUTPUT"
+          echo "arch_short=$ashort" >> "$GITHUB_OUTPUT"
+          echo "perl=$pver" >> "$GITHUB_OUTPUT"
+
       #~ Local composite actions resolve against the caller repo when this
       #~ workflow is invoked cross-repo, so these steps stay inlined.
-      - name: Record build status
+      - name: Record build status and metadata
         if: always()
         shell: bash
-        run: echo '${{ job.status }}' > '${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result'
+        run: |
+          fname='${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}'
+          echo '${{ job.status }}' > "$fname.result"
+          jq -n \
+            --arg status '${{ job.status }}' \
+            --arg platform '${{ inputs.platform_name }}' \
+            --arg family '${{ steps.info.outputs.family }}' \
+            --arg arch '${{ inputs.arch }}' \
+            --arg ashort '${{ steps.info.outputs.arch_short }}' \
+            --arg toolchain '${{ inputs.toolchain }}' \
+            --arg perl '${{ steps.info.outputs.perl }}' \
+            --arg variant '${{ inputs.variant }}' \
+            '{status:$status,platform:$platform,family:$family,arch:$arch,arch_short:$ashort,toolchain:$toolchain,perl:$perl,variant:$variant}' \
+            > "$fname.json"
 
       - name: Upload build status artifact
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: result-artifact-${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}
-          path: ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result
+          path: |
+            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result
+            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.json
           retention-days: 1
