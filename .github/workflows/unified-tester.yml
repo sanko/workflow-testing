@@ -1,0 +1,66 @@
+name: Unified Tester
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      platform_name:
+        required: true
+        type: string
+      runner_type:
+        description: "Either 'vm' or 'direct'"
+        required: true
+        type: string
+      os:
+        required: true
+        type: string
+      os_version:
+        required: false
+        type: string
+      arch:
+        required: true
+        type: string
+      prepare:
+        required: false
+        type: string
+      host_os:
+        required: false
+        type: string
+      toolchain:
+        required: true
+        type: string
+      task:
+        description: >
+          Command(s) executed in the target environment. Defaults to the
+          standard coverage build when omitted.
+        required: false
+        type: string
+
+jobs:
+  vm:
+    if: inputs.runner_type == 'vm'
+    uses: ./.github/workflows/run-vm.yml
+    secrets: inherit
+    with:
+      platform_name: ${{ inputs.platform_name }}
+      os: ${{ inputs.os }}
+      os_version: ${{ inputs.os_version }}
+      arch: ${{ inputs.arch }}
+      prepare: ${{ inputs.prepare }}
+      host_os: ${{ inputs.host_os }}
+      toolchain: ${{ inputs.toolchain }}
+      task: ${{ inputs.task || format('perl build.pl --compiler={0} coverage', inputs.toolchain) }}
+
+  direct:
+    if: inputs.runner_type == 'direct'
+    uses: ./.github/workflows/run-direct.yml
+    secrets: inherit
+    with:
+      platform_name: ${{ inputs.platform_name }}
+      os: ${{ inputs.os }}
+      arch: ${{ inputs.arch }}
+      prepare: ${{ inputs.prepare }}
+      toolchain: ${{ inputs.toolchain }}
+      task: ${{ inputs.task || format('perl build.pl --compiler={0} coverage', inputs.toolchain) }}

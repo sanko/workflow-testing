@@ -1,0 +1,65 @@
+name: Run Task on Hosted Runner
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      platform_name:
+        required: true
+        type: string
+      os:
+        required: true
+        type: string
+      arch:
+        required: true
+        type: string
+      prepare:
+        required: false
+        type: string
+      toolchain:
+        required: true
+        type: string
+      task:
+        description: 'Command(s) to execute on the runner'
+        required: true
+        type: string
+
+jobs:
+  run:
+    name: ${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.toolchain }}
+    runs-on: ${{ inputs.os }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6.0.0
+
+      - name: Setup MSVC
+        if: inputs.toolchain == 'msvc'
+        uses: TheMrMilchmann/setup-msvc-dev@v4.1.0
+        with:
+          arch: ${{ inputs.arch == 'aarch64' && 'arm64' || 'x64' }}
+
+      - name: Prepare environment
+        if: inputs.prepare != ''
+        shell: bash
+        run: ${{ inputs.prepare }}
+
+      - name: Run task
+        shell: bash
+        run: ${{ inputs.task }}
+
+      #~ Local composite actions resolve against the caller repo when this
+      #~ workflow is invoked cross-repo, so these steps stay inlined.
+      - name: Record build status
+        if: always()
+        shell: bash
+        run: echo '${{ job.status }}' > '${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result'
+
+      - name: Upload build status artifact
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: result-artifact-${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}
+          path: ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result
+          retention-days: 1
