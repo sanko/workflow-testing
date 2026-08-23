@@ -6,134 +6,116 @@ permissions:
 on:
   workflow_call:
     inputs:
-      platform_name:
-        required: true
-        type: string
-      os:
+      matrix:
+        description: >
+          JSON array of setups for this OS family. Item fields:
+          platform_name (required), os (required), arch (required),
+          toolchain, prepare, variant. The os selects the VM image.
         required: true
         type: string
       os_version:
-        required: false
-        type: string
-      arch:
-        required: true
-        type: string
-      prepare:
+        description: 'Release/version forwarded to vmactions'
         required: false
         type: string
       host_os:
         description: 'Runner label hosting the VM (defaults to ubuntu-latest)'
         required: false
         type: string
-      toolchain:
-        required: true
-        type: string
-      variant:
-        description: >
-          Optional build-flavor label (e.g. longdoubles) shown in summaries.
-        required: false
-        type: string
       task:
         description: >
-          Command(s) to execute inside the VM. Defaults to the standard
-          coverage build when omitted.
+          Command(s) executed inside the VM. Defaults to the standard
+          coverage build when omitted. Applies to every setup in the matrix.
         required: false
         type: string
 
 jobs:
   run:
-    name: ${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.toolchain }}
+    name: ${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     runs-on: ${{ inputs.host_os || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.matrix) }}
     env:
-      #~ Falls back to the standard coverage build when no task is passed
-      TASK: ${{ inputs.task || format('perl build.pl --compiler={0} coverage', inputs.toolchain) }}
+      #~ Unique base name for this setup's result files
+      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
 
       - name: Build and Test in FreeBSD
-        if: inputs.os == 'freebsd'
+        if: matrix.os == 'freebsd'
         uses: vmactions/freebsd-vm@v1.5.2
         with:
           release: ${{ inputs.os_version }}
           usesh: true
-          arch: ${{ inputs.arch }}
-          prepare: ${{ inputs.prepare }}
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
           run: |
             #~ Capture the perl version inside the VM; the shared workspace
             #~ syncs this file back to the host for the info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ env.TASK }}
+            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Build and Test in OpenBSD
-        if: inputs.os == 'openbsd'
+        if: matrix.os == 'openbsd'
         uses: vmactions/openbsd-vm@v1.4.5
         with:
           release: ${{ inputs.os_version }}
           usesh: true
-          arch: ${{ inputs.arch }}
-          prepare: ${{ inputs.prepare }}
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
           run: |
-            #~ Capture the perl version inside the VM; the shared workspace
-            #~ syncs this file back to the host for the info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ env.TASK }}
+            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Build and Test in NetBSD
-        if: inputs.os == 'netbsd'
+        if: matrix.os == 'netbsd'
         uses: vmactions/netbsd-vm@v1.4.5
         with:
           release: ${{ inputs.os_version }}
           usesh: true
-          arch: ${{ inputs.arch }}
-          prepare: ${{ inputs.prepare }}
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
           run: |
-            #~ Capture the perl version inside the VM; the shared workspace
-            #~ syncs this file back to the host for the info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ env.TASK }}
+            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Build and Test in DragonflyBSD
-        if: inputs.os == 'dragonflybsd'
+        if: matrix.os == 'dragonflybsd'
         uses: vmactions/dragonflybsd-vm@v1.3.1
         with:
           release: ${{ inputs.os_version }}
           usesh: true
-          arch: ${{ inputs.arch }}
-          prepare: ${{ inputs.prepare }}
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
           run: |
-            #~ Capture the perl version inside the VM; the shared workspace
-            #~ syncs this file back to the host for the info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ env.TASK }}
+            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Build and Test in Solaris
-        if: inputs.os == 'solaris'
+        if: matrix.os == 'solaris'
         uses: vmactions/solaris-vm@v1.3.8
         with:
           release: ${{ inputs.os_version }}
           usesh: true
-          arch: ${{ inputs.arch }}
-          prepare: ${{ inputs.prepare }}
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
           run: |
-            #~ Capture the perl version inside the VM; the shared workspace
-            #~ syncs this file back to the host for the info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ env.TASK }}
+            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Build and Test in OmniOS
-        if: inputs.os == 'omnios'
+        if: matrix.os == 'omnios'
         uses: vmactions/omnios-vm@v1.3.4
         with:
           release: ${{ inputs.os_version }}
           usesh: true
-          arch: ${{ inputs.arch }}
-          prepare: ${{ inputs.prepare }}
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
           run: |
-            #~ Capture the perl version inside the VM; the shared workspace
-            #~ syncs this file back to the host for the info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ env.TASK }}
+            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       #~ - name: Upload coverage reports to Codecov
         #~ uses: codecov/codecov-action@v5
@@ -149,23 +131,20 @@ jobs:
         id: info
         shell: bash
         run: |
-          case "${{ inputs.os }}" in
-            ubuntu*)       family='Linux' ;;
-            macos*)        family='macOS' ;;
-            windows*)      family='Windows' ;;
+          case "${{ matrix.os }}" in
             freebsd)       family='FreeBSD' ;;
             openbsd)       family='OpenBSD' ;;
             netbsd)        family='NetBSD' ;;
             dragonflybsd)  family='DragonFly BSD' ;;
             solaris)       family='Solaris' ;;
             omnios)        family='OmniOS' ;;
-            *)             family="${{ inputs.os }}" ;;
+            *)             family="${{ matrix.os }}" ;;
           esac
-          case "${{ inputs.arch }}" in
+          case "${{ matrix.arch }}" in
             x86_64|amd64)  ashort='x64' ;;
             aarch64|arm64) ashort='a64' ;;
             riscv64)       ashort='r64' ;;
-            *)             ashort="${{ inputs.arch }}" ;;
+            *)             ashort="${{ matrix.arch }}" ;;
           esac
           #~ .perl-version is written inside the VM (see the run steps above);
           #~ fall back to a host perl for anything else.
@@ -188,26 +167,25 @@ jobs:
         if: always()
         shell: bash
         run: |
-          fname='${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}'
-          echo '${{ job.status }}' > "$fname.result"
+          echo '${{ job.status }}' > "$FNAME.result"
           jq -n \
             --arg status '${{ job.status }}' \
-            --arg platform '${{ inputs.platform_name }}' \
+            --arg platform '${{ matrix.platform_name }}' \
             --arg family '${{ steps.info.outputs.family }}' \
-            --arg arch '${{ inputs.arch }}' \
+            --arg arch '${{ matrix.arch }}' \
             --arg ashort '${{ steps.info.outputs.arch_short }}' \
-            --arg toolchain '${{ inputs.toolchain }}' \
+            --arg toolchain '${{ matrix.toolchain }}' \
             --arg perl '${{ steps.info.outputs.perl }}' \
-            --arg variant '${{ inputs.variant }}' \
+            --arg variant '${{ matrix.variant }}' \
             '{status:$status,platform:$platform,family:$family,arch:$arch,arch_short:$ashort,toolchain:$toolchain,perl:$perl,variant:$variant}' \
-            > "$fname.json"
+            > "$FNAME.json"
 
       - name: Upload build status artifact
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: result-artifact-${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}
+          name: result-artifact-${{ env.FNAME }}
           path: |
-            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result
-            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.json
+            ${{ env.FNAME }}.result
+            ${{ env.FNAME }}.json
           retention-days: 1

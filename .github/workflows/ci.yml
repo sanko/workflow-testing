@@ -14,150 +14,141 @@ permissions:
 
 jobs:
 
-  vm:
-    name:  ${{ matrix.platform.os }}
+  freebsd:
+    name: FreeBSD
     uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
-      platform_name: ${{ matrix.platform.os }}
-      os: ${{ matrix.platform.os }}
-      os_version: ${{ matrix.platform.version }}
-      arch: ${{ matrix.arch }}
-      prepare:  ${{ matrix.toolchain == 'clang' && matrix.platform.prepare_clang || matrix.platform.prepare_gcc }}
-      host_os: 'ubuntu-latest'
-      toolchain: ${{ matrix.compiler_cmd || matrix.toolchain }}
+      os_version: '15.0'
       task: 'perl -V'
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - os: 'freebsd'
-            version: '15.0'
-            prepare_gcc:   'pkg install -y perl5 lang/gcc'
-            prepare_clang: 'pkg install -y perl5 llvm'
-          - os: 'openbsd'
-            version: '7.8'
-            #~ https://openbsd.app/
-            prepare_gcc:   'pkg_add gcc-11.2.0p19 g++-11.2.0p19'
-            prepare_clang: ''
-          - os: 'netbsd'
-            version: '10.1'
-            prepare_gcc:   '/usr/sbin/pkg_add perl'
-          - os: 'dragonflybsd'
-            version: '6.4.0'
-            prepare_gcc:   'pkg install -y perl5 gcc'
-          - os: 'solaris'
-            version: '11.4'
-            prepare_gcc:   'pkg install -v --accept perl-538 gcc'
-          - os: 'omnios'
-            version: 'r151056'
-            prepare_gcc:   'pkg install -v --accept perl build-essential'
-        arch: ['x86_64', 'aarch64', 'riscv64']
-        toolchain: ['gcc', 'clang']
-        exclude:
-          # Architecture exclusions
-          - platform: { os: 'dragonflybsd' }
-            arch: 'aarch64'
-          - platform: { os: 'solaris' }
-            arch: 'aarch64'
-          - platform: { os: 'omnios' }
-            arch: 'aarch64'
-          - platform: { os: 'dragonflybsd' }
-            arch: 'riscv64'
-          # FreeBSD publishes no binary packages for riscv64 (Tier 2), so pkg(8)
-          # cannot bootstrap on it; perl/gcc/llvm are only available via ports.
-          - platform: { os: 'freebsd' }
-            arch: 'riscv64'
-          - platform: { os: 'netbsd' }
-            arch: 'riscv64'
-          - platform: { os: 'solaris' }
-            arch: 'riscv64'
-          - platform: { os: 'omnios' }
-            arch: 'riscv64'
-          # Toolchain exclusions for simplicity
-          - platform: { os: 'netbsd' }
-            toolchain: 'clang'
-          - platform: { os: 'dragonflybsd' }
-            toolchain: 'clang'
-          - platform: { os: 'solaris' }
-            toolchain: 'clang'
-          - platform: { os: 'omnios' }
-            toolchain: 'clang'
-        include:
-          # Use specific 'egcc' command for packaged GCC on OpenBSD
-          - platform: { os: 'openbsd' }
-            toolchain: 'gcc'
-            compiler_cmd: 'egcc'
+      matrix: >
+        [
+          {"platform_name":"freebsd","os":"freebsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5 lang/gcc"},
+          {"platform_name":"freebsd","os":"freebsd","arch":"x86_64","toolchain":"clang","prepare":"pkg install -y perl5 llvm"},
+          {"platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"gcc","prepare":"pkg install -y perl5 lang/gcc"},
+          {"platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"clang","prepare":"pkg install -y perl5 llvm"}
+        ]
 
-  direct:
-    name: ${{ matrix.platform.name }}-${{ matrix.platform.arch }}
+  openbsd:
+    name: OpenBSD
+    uses: ./.github/workflows/run-vm.yml
+    secrets: inherit
+    with:
+      os_version: '7.8'
+      task: 'perl -V'
+      matrix: >
+        [
+          {"platform_name":"openbsd","os":"openbsd","arch":"x86_64","toolchain":"egcc","prepare":"pkg_add gcc-11.2.0p19 g++-11.2.0p19"},
+          {"platform_name":"openbsd","os":"openbsd","arch":"x86_64","toolchain":"clang"},
+          {"platform_name":"openbsd","os":"openbsd","arch":"aarch64","toolchain":"egcc","prepare":"pkg_add gcc-11.2.0p19 g++-11.2.0p19"},
+          {"platform_name":"openbsd","os":"openbsd","arch":"aarch64","toolchain":"clang"},
+          {"platform_name":"openbsd","os":"openbsd","arch":"riscv64","toolchain":"egcc","prepare":"pkg_add gcc-11.2.0p19 g++-11.2.0p19"},
+          {"platform_name":"openbsd","os":"openbsd","arch":"riscv64","toolchain":"clang"}
+        ]
+      #~ https://openbsd.app/
+
+  netbsd:
+    name: NetBSD
+    uses: ./.github/workflows/run-vm.yml
+    secrets: inherit
+    with:
+      os_version: '10.1'
+      task: 'perl -V'
+      matrix: >
+        [
+          {"platform_name":"netbsd","os":"netbsd","arch":"x86_64","toolchain":"gcc","prepare":"/usr/sbin/pkg_add perl"},
+          {"platform_name":"netbsd","os":"netbsd","arch":"aarch64","toolchain":"gcc","prepare":"/usr/sbin/pkg_add perl"}
+        ]
+
+  dragonflybsd:
+    name: DragonFly BSD
+    uses: ./.github/workflows/run-vm.yml
+    secrets: inherit
+    with:
+      os_version: '6.4.0'
+      task: 'perl -V'
+      matrix: >
+        [
+          {"platform_name":"dragonflybsd","os":"dragonflybsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5 gcc"}
+        ]
+
+  solaris:
+    name: Solaris
+    uses: ./.github/workflows/run-vm.yml
+    secrets: inherit
+    with:
+      os_version: '11.4'
+      task: 'perl -V'
+      matrix: >
+        [
+          {"platform_name":"solaris","os":"solaris","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -v --accept perl-538 gcc"}
+        ]
+
+  omnios:
+    name: OmniOS
+    uses: ./.github/workflows/run-vm.yml
+    secrets: inherit
+    with:
+      os_version: 'r151056'
+      task: 'perl -V'
+      matrix: >
+        [
+          {"platform_name":"omnios","os":"omnios","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -v --accept perl build-essential"}
+        ]
+
+  linux:
+    name: Linux
     uses: ./.github/workflows/run-direct.yml
     secrets: inherit
     with:
-      platform_name: ${{ matrix.platform.name }}
-      os: ${{ matrix.platform.os }}
-      arch: ${{ matrix.platform.arch }}
-      prepare: ${{ (matrix.toolchain == 'clang' && matrix.platform.prepare_clang) || (matrix.toolchain == 'msvc' && matrix.platform.prepare_msvc) || matrix.platform.prepare_gcc }}
-      toolchain: ${{ matrix.toolchain }}
       task: 'perl -V'
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: 'ubuntu'
-            os: 'ubuntu-latest'
-            arch: 'x86_64'
-            prepare_gcc: 'sudo apt-get update && sudo apt-get install -y gcc perl'
-            prepare_clang: 'sudo apt-get update && sudo apt-get install -y clang perl'
-          - name: 'macos'
-            os: 'macos-15'
-            arch: 'aarch64'
-            prepare_gcc: ''
-            prepare_clang: ''
-          - name: 'macos'
-            os: 'macos-15-intel'
-            arch: 'x86_64'
-            prepare_gcc: ''
-            prepare_clang: ''
-          - name: 'windows'
-            os: 'windows-latest'
-            arch: 'x86_64'
-            # Setup Strawberry Perl so the task can invoke perl under bash
-            prepare_gcc: 'choco install mingw strawberryperl'
-            prepare_clang: 'choco install llvm strawberryperl'
-            prepare_msvc: 'choco install opencppcoverage strawberryperl; bash'
-          - name: 'ubuntu'
-            os: 'ubuntu-24.04-arm'
-            arch: 'aarch64'
-            prepare_gcc: 'sudo apt-get update && sudo apt-get install -y gcc perl'
-            prepare_clang: 'sudo apt-get update && sudo apt-get install -y clang perl'
-          - name: 'windows'
-            os: 'windows-11-arm'
-            arch: 'aarch64'
-            prepare_gcc: ''
-            prepare_clang: 'choco install llvm strawberryperl'
-            prepare_msvc: 'choco install opencppcoverage strawberryperl; bash'
-          - name: 'ubuntu'
-            os: 'ubuntu-24.04-riscv'
-            arch: 'riscv64'
-            prepare_gcc: 'sudo apt-get update && sudo apt-get install -y gcc perl'
-            # libclang-rt-dev provides libclang_rt.profile-riscv64.a, which clang's
-            # --coverage link step needs on RISC-V (not pulled in by `clang` alone).
-            prepare_clang: 'sudo apt-get update && sudo apt-get install -y clang perl libclang-rt-dev'
-        toolchain: ['gcc', 'clang', 'msvc']
-        exclude:
-          #~ - platform: { name: 'macos' }
-            #~ toolchain: 'gcc'
-          - platform: { name: 'ubuntu' }
-            toolchain: 'msvc'
-          - platform: { name: 'macos' }
-            toolchain: 'msvc'
+      matrix: >
+        [
+          {"platform_name":"ubuntu","os":"ubuntu-latest","arch":"x86_64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},
+          {"platform_name":"ubuntu","os":"ubuntu-latest","arch":"x86_64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y clang perl"},
+          {"platform_name":"ubuntu","os":"ubuntu-24.04-arm","arch":"aarch64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},
+          {"platform_name":"ubuntu","os":"ubuntu-24.04-arm","arch":"aarch64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y clang perl"},
+          {"platform_name":"ubuntu","os":"ubuntu-24.04-riscv","arch":"riscv64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},
+          {"platform_name":"ubuntu","os":"ubuntu-24.04-riscv","arch":"riscv64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y clang perl libclang-rt-dev"}
+        ]
+
+  macos:
+    name: macOS
+    uses: ./.github/workflows/run-direct.yml
+    secrets: inherit
+    with:
+      task: 'perl -V'
+      matrix: >
+        [
+          {"platform_name":"macos","os":"macos-15","arch":"aarch64","toolchain":"gcc"},
+          {"platform_name":"macos","os":"macos-15","arch":"aarch64","toolchain":"clang"},
+          {"platform_name":"macos","os":"macos-15-intel","arch":"x86_64","toolchain":"gcc"},
+          {"platform_name":"macos","os":"macos-15-intel","arch":"x86_64","toolchain":"clang"}
+        ]
+
+  windows:
+    name: Windows
+    uses: ./.github/workflows/run-direct.yml
+    secrets: inherit
+    with:
+      task: 'perl -V'
+      matrix: >
+        [
+          {"platform_name":"windows","os":"windows-latest","arch":"x86_64","toolchain":"gcc","prepare":"choco install mingw strawberryperl"},
+          {"platform_name":"windows","os":"windows-latest","arch":"x86_64","toolchain":"clang","prepare":"choco install llvm strawberryperl"},
+          {"platform_name":"windows","os":"windows-latest","arch":"x86_64","toolchain":"msvc","prepare":"choco install opencppcoverage strawberryperl; bash"},
+          {"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"gcc"},
+          {"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"clang","prepare":"choco install llvm strawberryperl"},
+          {"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"msvc","prepare":"choco install opencppcoverage strawberryperl; bash"}
+        ]
+      # Setup Strawberry Perl so the task can invoke perl under bash
 
   results:
     name: Summary
     if: always()
-    needs: [vm, direct]
+    needs: [freebsd, openbsd, netbsd, dragonflybsd, solaris, omnios, linux, macos, windows]
     uses: ./.github/workflows/results-summary.yml
+
   publish-status:
     name: Publish Status Page
     if: ( success() || failure() ) && github.ref == 'refs/heads/main' # Only run on pushes to the main branch

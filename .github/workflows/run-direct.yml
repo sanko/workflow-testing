@@ -6,65 +6,56 @@ permissions:
 on:
   workflow_call:
     inputs:
-      platform_name:
-        required: true
-        type: string
-      os:
-        required: true
-        type: string
-      arch:
-        required: true
-        type: string
-      prepare:
-        required: false
-        type: string
-      toolchain:
-        required: true
-        type: string
-      variant:
+      matrix:
         description: >
-          Optional build-flavor label (e.g. longdoubles) shown in summaries.
-        required: false
+          JSON array of setups for this OS family. Item fields:
+          platform_name (required), os (required), arch (required),
+          toolchain, prepare, variant.
+        required: true
         type: string
       task:
         description: >
-          Command(s) to execute on the runner. Defaults to the standard
-          coverage build when omitted.
+          Command(s) executed on the runner. Defaults to the standard
+          coverage build when omitted. Applies to every setup in the matrix.
         required: false
         type: string
 
 jobs:
   run:
-    name: ${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.toolchain }}
-    runs-on: ${{ inputs.os }}
+    name: ${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.matrix) }}
     env:
-      #~ Falls back to the standard coverage build when no task is passed
-      TASK: ${{ inputs.task || format('perl build.pl --compiler={0} coverage', inputs.toolchain) }}
+      #~ Unique base name for this setup's result files
+      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
 
       - name: Setup MSVC
-        if: inputs.toolchain == 'msvc'
+        if: matrix.toolchain == 'msvc'
         uses: TheMrMilchmann/setup-msvc-dev@v4.1.0
         with:
-          arch: ${{ inputs.arch == 'aarch64' && 'arm64' || 'x64' }}
+          arch: ${{ matrix.arch == 'aarch64' && 'arm64' || 'x64' }}
 
       - name: Prepare environment
-        if: inputs.prepare != ''
+        if: matrix.prepare != ''
         shell: bash
-        run: ${{ inputs.prepare }}
+        run: ${{ matrix.prepare }}
 
       - name: Run task
         shell: bash
-        run: ${{ env.TASK }}
+        run: ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Collect environment info
         if: always()
         id: info
         shell: bash
         run: |
-          case "${{ inputs.os }}" in
+          case "${{ matrix.os }}" in
             ubuntu*)       family='Linux' ;;
             macos*)        family='macOS' ;;
             windows*)      family='Windows' ;;
@@ -74,22 +65,15 @@ jobs:
             dragonflybsd)  family='DragonFly BSD' ;;
             solaris)       family='Solaris' ;;
             omnios)        family='OmniOS' ;;
-            *)             family="${{ inputs.os }}" ;;
+            *)             family="${{ matrix.os }}" ;;
           esac
-          case "${{ inputs.arch }}" in
+          case "${{ matrix.arch }}" in
             x86_64|amd64)  ashort='x64' ;;
             aarch64|arm64) ashort='a64' ;;
             riscv64)       ashort='r64' ;;
-            *)             ashort="${{ inputs.arch }}" ;;
+            *)             ashort="${{ matrix.arch }}" ;;
           esac
-          #~ Prefer the version captured inside a VM (see run-vm.yml); fall back
-          #~ to the perl on PATH for direct runners.
-          if [ -f .perl-version ]; then
-            pver="$(cat .perl-version)"
-            rm -f .perl-version
-          else
-            pver="$(perl -e 'printf "%vd", $^V' 2>/dev/null || true)"
-          fi
+          pver="$(perl -e 'printf "%vd", $^V' 2>/dev/null || true)"
           if [ -n "$pver" ]; then
             pver="v$(echo "$pver" | cut -d. -f1-2)"
           fi
@@ -103,26 +87,25 @@ jobs:
         if: always()
         shell: bash
         run: |
-          fname='${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}'
-          echo '${{ job.status }}' > "$fname.result"
+          echo '${{ job.status }}' > "$FNAME.result"
           jq -n \
             --arg status '${{ job.status }}' \
-            --arg platform '${{ inputs.platform_name }}' \
+            --arg platform '${{ matrix.platform_name }}' \
             --arg family '${{ steps.info.outputs.family }}' \
-            --arg arch '${{ inputs.arch }}' \
+            --arg arch '${{ matrix.arch }}' \
             --arg ashort '${{ steps.info.outputs.arch_short }}' \
-            --arg toolchain '${{ inputs.toolchain }}' \
+            --arg toolchain '${{ matrix.toolchain }}' \
             --arg perl '${{ steps.info.outputs.perl }}' \
-            --arg variant '${{ inputs.variant }}' \
+            --arg variant '${{ matrix.variant }}' \
             '{status:$status,platform:$platform,family:$family,arch:$arch,arch_short:$ashort,toolchain:$toolchain,perl:$perl,variant:$variant}' \
-            > "$fname.json"
+            > "$FNAME.json"
 
       - name: Upload build status artifact
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: result-artifact-${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}
+          name: result-artifact-${{ env.FNAME }}
           path: |
-            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.result
-            ${{ inputs.platform_name }}-${{ inputs.arch }}-${{ inputs.toolchain }}.json
+            ${{ env.FNAME }}.result
+            ${{ env.FNAME }}.json
           retention-days: 1
