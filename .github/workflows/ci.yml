@@ -16,11 +16,10 @@ jobs:
 
   vm:
     name:  ${{ matrix.platform.os }}
-    uses: ./.github/workflows/unified-tester.yml
+    uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
       platform_name: ${{ matrix.platform.os }}
-      runner_type: 'vm'
       os: ${{ matrix.platform.os }}
       os_version: ${{ matrix.platform.version }}
       arch: ${{ matrix.arch }}
@@ -92,11 +91,10 @@ jobs:
 
   direct:
     name: ${{ matrix.platform.name }}-${{ matrix.platform.arch }}
-    uses: ./.github/workflows/unified-tester.yml
+    uses: ./.github/workflows/run-direct.yml
     secrets: inherit
     with:
       platform_name: ${{ matrix.platform.name }}
-      runner_type: 'direct'
       os: ${{ matrix.platform.os }}
       arch: ${{ matrix.platform.arch }}
       prepare: ${{ (matrix.toolchain == 'clang' && matrix.platform.prepare_clang) || (matrix.toolchain == 'msvc' && matrix.platform.prepare_msvc) || matrix.platform.prepare_gcc }}

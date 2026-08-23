@@ -22,14 +22,19 @@ on:
         required: true
         type: string
       task:
-        description: 'Command(s) to execute on the runner'
-        required: true
+        description: >
+          Command(s) to execute on the runner. Defaults to the standard
+          coverage build when omitted.
+        required: false
         type: string
 
 jobs:
   run:
     name: ${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.toolchain }}
     runs-on: ${{ inputs.os }}
+    env:
+      #~ Falls back to the standard coverage build when no task is passed
+      TASK: ${{ inputs.task || format('perl build.pl --compiler={0} coverage', inputs.toolchain) }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
@@ -47,7 +52,7 @@ jobs:
 
       - name: Run task
         shell: bash
-        run: ${{ inputs.task }}
+        run: ${{ env.TASK }}
 
       #~ Local composite actions resolve against the caller repo when this
       #~ workflow is invoked cross-repo, so these steps stay inlined.
