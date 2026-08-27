@@ -16,8 +16,8 @@
 - `a64-gcc-v5.42.3` :white_check_mark:
 - `a64-msvc-v5.42.3` :white_check_mark:
 - `x64-clang-v5.42.2` :white_check_mark:
-- `x64-gcc-v5.42.3` :white_check_mark:
-- `x64-msvc-v5.42.2` :white_check_mark:
+- `x64-gcc-v5.42.2` :white_check_mark:
+- `x64-msvc-v5.42.3` :white_check_mark:
 ### FreeBSD
 - `a64-clang-v5.42.3` :white_check_mark:
 - `a64-gcc-v5.42.3` :white_check_mark:
