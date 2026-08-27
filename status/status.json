@@ -1,35 +1,35 @@
 {
-"ubuntu-aarch64-clang": "👎🏽 failing"
+"ubuntu-aarch64-clang": "👍🏽 passing"
 ,
-"ubuntu-aarch64-gcc": "👎🏽 failing"
+"ubuntu-aarch64-gcc": "👍🏽 passing"
 ,
-"ubuntu-riscv64-clang": "👎🏽 failing"
+"ubuntu-riscv64-clang": "👍🏽 passing"
 ,
-"ubuntu-riscv64-gcc": "👎🏽 failing"
+"ubuntu-riscv64-gcc": "👍🏽 passing"
 ,
-"ubuntu-x86_64-clang": "👎🏽 failing"
+"ubuntu-x86_64-clang": "👍🏽 passing"
 ,
-"ubuntu-x86_64-gcc": "👎🏽 failing"
+"ubuntu-x86_64-gcc": "👍🏽 passing"
 ,
-"macos-aarch64-clang": "👎🏽 failing"
+"macos-aarch64-clang": "👍🏽 passing"
 ,
-"macos-aarch64-gcc": "👎🏽 failing"
+"macos-aarch64-gcc": "👍🏽 passing"
 ,
-"macos-x86_64-clang": "👎🏽 failing"
+"macos-x86_64-clang": "👍🏽 passing"
 ,
-"macos-x86_64-gcc": "👎🏽 failing"
+"macos-x86_64-gcc": "👍🏽 passing"
 ,
-"windows-aarch64-clang": "👎🏽 failing"
+"windows-aarch64-clang": "👍🏽 passing"
 ,
-"windows-aarch64-gcc": "👎🏽 failing"
+"windows-aarch64-gcc": "👍🏽 passing"
 ,
-"windows-aarch64-msvc": "👎🏽 failing"
+"windows-aarch64-msvc": "👍🏽 passing"
 ,
-"windows-x86_64-clang": "👎🏽 failing"
+"windows-x86_64-clang": "👍🏽 passing"
 ,
-"windows-x86_64-gcc": "👎🏽 failing"
+"windows-x86_64-gcc": "👍🏽 passing"
 ,
-"windows-x86_64-msvc": "👎🏽 failing"
+"windows-x86_64-msvc": "👍🏽 passing"
 ,
 "freebsd-aarch64-clang": "👍🏽 passing"
 ,

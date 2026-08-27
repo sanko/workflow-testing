@@ -1,23 +1,23 @@
 ## Build and Test Summary
 ### Linux
-- `a64-clang-v5.38.2` :x:
-- `a64-gcc-v5.38.2` :x:
-- `r64-clang-v5.38.2` :x:
-- `r64-gcc-v5.38.2` :x:
-- `x64-clang-v5.38.2` :x:
-- `x64-gcc-v5.38.2` :x:
+- `a64-clang-v5.38.2` :white_check_mark:
+- `a64-gcc-v5.38.2` :white_check_mark:
+- `r64-clang-v5.38.2` :white_check_mark:
+- `r64-gcc-v5.38.2` :white_check_mark:
+- `x64-clang-v5.38.2` :white_check_mark:
+- `x64-gcc-v5.38.2` :white_check_mark:
 ### macOS
-- `a64-clang-v5.42.2` :x:
-- `a64-gcc-v5.42.2` :x:
-- `x64-clang-v5.44.0` :x:
-- `x64-gcc-v5.44.0` :x:
+- `a64-clang-v5.42.2` :white_check_mark:
+- `a64-gcc-v5.42.2` :white_check_mark:
+- `x64-clang-v5.44.0` :white_check_mark:
+- `x64-gcc-v5.44.0` :white_check_mark:
 ### Windows
-- `a64-clang-v5.42.3` :x:
-- `a64-gcc-v5.42.3` :x:
-- `a64-msvc-v5.42.3` :x:
-- `x64-clang-v5.42.2` :x:
-- `x64-gcc-v5.42.2` :x:
-- `x64-msvc-v5.42.2` :x:
+- `a64-clang-v5.42.3` :white_check_mark:
+- `a64-gcc-v5.42.3` :white_check_mark:
+- `a64-msvc-v5.42.3` :white_check_mark:
+- `x64-clang-v5.42.2` :white_check_mark:
+- `x64-gcc-v5.42.3` :white_check_mark:
+- `x64-msvc-v5.42.2` :white_check_mark:
 ### FreeBSD
 - `a64-clang-v5.42.3` :white_check_mark:
 - `a64-gcc-v5.42.3` :white_check_mark:
