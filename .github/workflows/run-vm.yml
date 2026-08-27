@@ -95,7 +95,12 @@ jobs:
               MAKE=make
               command -v gmake >/dev/null 2>&1 && MAKE=gmake
               sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none "$@"
-              "${MAKE}" -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+              #~ Force the pre-4.4 pipe jobserver: gmake 4.4 defaults to a
+              #~ fifo-based --jobserver-auth=fifo:... token that perl's nested
+              #~ sub-makes (via the OS make, not gmake) mis-parse as
+              #~ "-j observer-auth=fifo:..." and abort with "argument ... to
+              #~ option '-j' must be a positive number" on FreeBSD/other *BSD.
+              "${MAKE}" --jobserver-style=pipe -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
               "${MAKE}" install
               #~ Sentinel: never report success without a built perl binary.
               [ -x "${prefix}/bin/perl" ]
