@@ -46,8 +46,6 @@ jobs:
         shell: bash
         run: ${{ matrix.prepare }}
 
-      - name: Install prereqs
-        run: cpanm --installdeps --notest --with-suggests --with-recommends --with-configure -v .
       #~ On Windows the git-bash MSYS2/Cygwin perl shadows Strawberry unless we
       #~ put Strawberry first. choco installs to C:\Strawberry; its bin dirs were
       #~ never added to PATH, so `perl` resolved to the MSYS build (which lacks
