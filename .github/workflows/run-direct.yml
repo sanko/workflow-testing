@@ -46,6 +46,37 @@ jobs:
         shell: bash
         run: ${{ matrix.prepare }}
 
+      #~ On Windows the git-bash MSYS2/Cygwin perl shadows Strawberry unless we
+      #~ put Strawberry first. choco installs to C:\Strawberry; its bin dirs were
+      #~ never added to PATH, so `perl` resolved to the MSYS build (which lacks
+      #~ dual-life ExtUtils modules like ExtUtils::Manifest) and any cpanm run
+      #~ under it died with a bogus "Can't locate <core module>". Prepend
+      #~ Strawberry's dirs via GITHUB_PATH (which prepends) so the Run-task step
+      #~ resolves perl/cpanm/gcc to Strawberry.
+      - name: Force Strawberry Perl on PATH (Windows)
+        if: matrix.toolchain == 'gcc' && runner.os == 'Windows' && matrix.perl_version == ''
+        shell: pwsh
+        run: |
+          $sb = 'C:\Strawberry'
+          foreach ($d in @("$sb\perl\site\bin", "$sb\perl\bin", "$sb\c\bin")) {
+            Add-Content -Path $env:GITHUB_PATH -Value $d
+          }
+
+      #~ Fail fast if the active perl is still an MSYS/Cygwin build. A native
+      #~ strawberry perl reports "MSWin32"; a Cygwin/MSYS perl reports "cygwin".
+      #~ We only assert on Windows where the shadowing can happen.
+      - name: Verify perl is native (not MSYS/Cygwin)
+        if: runner.os == 'Windows' && matrix.perl_version == ''
+        shell: pwsh
+        run: |
+          $os = & perl -e 'print $^O'
+          Write-Host "perl \$^O = $os"
+          $os = "$os".Trim()
+          if ($os -ne 'MSWin32') {
+            Write-Error "Active perl is '$os', expected 'MSWin32' (MSYS/Cygwin perl shadows Strawberry). Check PATH ordering."
+            exit 1
+          }
+
       #~ Strict cache key: every component that changes the produced binary
       #~ is in the key, so a hit always means "this exact perl". No loose
       #~ restore-keys — restoring a differently-configured build would be
