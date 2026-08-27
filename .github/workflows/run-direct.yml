@@ -134,7 +134,16 @@ jobs:
 
       - name: Run task
         shell: bash
-        run: ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+        run: |
+          #~ git-bash re-injects /usr/bin (MSYS2 perl) ahead of GITHUB_PATH, so
+          #~ the env-level Strawberry prepend above is invisible to this shell.
+          #~ Re-assert Strawberry first here so task's perl/cpanm/Build resolve
+          #~ to it instead of the MSYS build (which lacks dual-life ExtUtils
+          #~ modules). Only meaningful on Windows hosted runners.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            export PATH="/c/Strawberry/perl/site/bin:/c/Strawberry/perl/bin:/c/Strawberry/c/bin:$PATH"
+          fi
+          ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Collect environment info
         if: always()

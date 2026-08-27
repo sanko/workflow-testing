@@ -95,12 +95,15 @@ jobs:
               MAKE=make
               command -v gmake >/dev/null 2>&1 && MAKE=gmake
               sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none "$@"
-              #~ Force the pre-4.4 pipe jobserver: gmake 4.4 defaults to a
-              #~ fifo-based --jobserver-auth=fifo:... token that perl's nested
-              #~ sub-makes (via the OS make, not gmake) mis-parse as
-              #~ "-j observer-auth=fifo:..." and abort with "argument ... to
-              #~ option '-j' must be a positive number" on FreeBSD/other *BSD.
-              "${MAKE}" --jobserver-style=pipe -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+              #~ Build perl serially. perl's source build recurses into
+              #~ per-module subdirs whose nested make picks up gmake 4.4's
+              #~ --jobserver-auth token from MAKEFLAGS and mis-parses it as
+              #~ "-j observer-auth=..." , aborting with "argument ... to option
+              #~ '-j' must be a positive number" on FreeBSD/other *BSD (the
+              #~ nested make is the OS/bundled make, not gmake). Any -jN spawns
+              #~ the jobserver, so the only reliable fix is a serial build. It
+              #~ is a one-time cost: the result is cached in perl-dist.
+              "${MAKE}"
               "${MAKE}" install
               #~ Sentinel: never report success without a built perl binary.
               [ -x "${prefix}/bin/perl" ]
