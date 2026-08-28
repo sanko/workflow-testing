@@ -54,7 +54,7 @@ jobs:
       #~ Strawberry's dirs via GITHUB_PATH (which prepends) so the Run-task step
       #~ resolves perl/cpanm/gcc to Strawberry.
       - name: Force Strawberry Perl on PATH (Windows)
-        if: matrix.toolchain == 'gcc' && runner.os == 'Windows' && matrix.perl_version == ''
+        if: runner.os == 'Windows' && matrix.perl_version == ''
         shell: pwsh
         run: |
           $sb = 'C:\Strawberry'
