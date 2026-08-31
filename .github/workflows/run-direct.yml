@@ -29,6 +29,10 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.matrix) }}
     env:
+      #~ Token for the GitHub API so release lookups bypass the anonymous
+      #~ 60 req/hr rate limit. The builder's HTTP::Tiny sends it as an
+      #~ Authorization: Bearer header when GITHUB_TOKEN is set.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       #~ Unique base name for this setup's result files
       FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
