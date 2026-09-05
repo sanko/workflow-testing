@@ -7,17 +7,10 @@
 - `x64-clang-v5.38.2` :white_check_mark:
 - `x64-gcc-v5.38.2` :white_check_mark:
 ### macOS
-- `a64-clang-v5.42.2` :white_check_mark:
-- `a64-gcc-v5.42.2` :white_check_mark:
+- `a64-clang-v5.44.0` :white_check_mark:
+- `a64-gcc-v5.44.0` :white_check_mark:
 - `x64-clang-v5.44.0` :white_check_mark:
 - `x64-gcc-v5.44.0` :white_check_mark:
-### Windows
-- `a64-clang-v5.42.3` :white_check_mark:
-- `a64-gcc-v5.42.3` :white_check_mark:
-- `a64-msvc-v5.42.3` :white_check_mark:
-- `x64-clang-v5.42.3` :white_check_mark:
-- `x64-gcc-v5.42.3` :white_check_mark:
-- `x64-msvc-v5.42.3` :white_check_mark:
 ### FreeBSD
 - `a64-clang-v5.42.3` :white_check_mark:
 - `a64-gcc-v5.42.3` :white_check_mark:
@@ -39,3 +32,10 @@
 - `x64-gcc-v5.38.4` :white_check_mark:
 ### OmniOS
 - `x64-gcc-v5.42.2` :white_check_mark:
+### 
+- `----failure-windows` :x:
+- `----failure-windows` :x:
+- `----failure-windows` :x:
+- `----failure-windows` :x:
+- `----failure-windows` :x:
+- `----failure-windows` :x:
