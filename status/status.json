@@ -19,6 +19,18 @@
 ,
 "macos-x86_64-gcc": "👍🏽 passing"
 ,
+"windows-aarch64-clang": "👍🏽 passing"
+,
+"windows-aarch64-gcc": "👍🏽 passing"
+,
+"windows-aarch64-msvc": "👍🏽 passing"
+,
+"windows-x86_64-clang": "👍🏽 passing"
+,
+"windows-x86_64-gcc": "👍🏽 passing"
+,
+"windows-x86_64-msvc": "👍🏽 passing"
+,
 "freebsd-aarch64-clang": "👍🏽 passing"
 ,
 "freebsd-aarch64-gcc": "👍🏽 passing"
@@ -48,16 +60,4 @@
 "solaris-x86_64-gcc": "👍🏽 passing"
 ,
 "omnios-x86_64-gcc": "👍🏽 passing"
-,
-"---": "👎🏽 failing"
-,
-"---": "👎🏽 failing"
-,
-"---": "👎🏽 failing"
-,
-"---": "👎🏽 failing"
-,
-"---": "👎🏽 failing"
-,
-"---": "👎🏽 failing"
 }
