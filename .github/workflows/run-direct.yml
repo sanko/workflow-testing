@@ -34,11 +34,25 @@ jobs:
       #~ 60 req/hr rate limit. The builder's HTTP::Tiny sends it as an
       #~ Authorization: Bearer header when GITHUB_TOKEN is set.
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #~ Unique base name for this setup's result files
-      FNAME: ${{ matrix.name && format('{0}-', matrix.name) || '' }}${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+      #~ Raw user-defined name (may contain spaces/slashes); used only to
+      #~ compute the filesystem-safe FNAME below.
+      RAW_NAME: ${{ matrix.name || '' }}
+      #~ Unique base name for this setup's result files.  When matrix.name is
+      #~ set the sanitisation step below overrides this with a safe version.
+      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
+
+      - name: Sanitise custom job name for filenames
+        if: matrix.name
+        shell: bash
+        run: |
+          #~ Spaces and forward slashes are the most common problematic
+          #~ characters in human-readable names; replace them with hyphens
+          #~ so the result is safe for filenames and artifact names.
+          safe=$(printf '%s' "$RAW_NAME" | tr ' /' '-')
+          echo "FNAME=${safe}-${FNAME}" >> "$GITHUB_ENV"
 
       - name: Setup MSVC
         if: matrix.toolchain == 'msvc'
