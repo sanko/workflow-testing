@@ -37,22 +37,42 @@ jobs:
       #~ Raw user-defined name (may contain spaces/slashes); used only to
       #~ compute the filesystem-safe FNAME below.
       RAW_NAME: ${{ matrix.name || '' }}
-      #~ Unique base name for this setup's result files.  When matrix.name is
-      #~ set the sanitisation step below overrides this with a safe version.
+      #~ Deterministic identity for this matrix entry, hashed (with python)
+      #~ in the fingerprint step so every distinct setup gets a unique,
+      #~ reproducible id even when arch/toolchain/perl are identical.
+      IDENTITY: >-
+        ${{ matrix.platform_name }}|${{ matrix.os }}|${{ matrix.arch }}|
+        ${{ matrix.toolchain }}|${{ matrix.perl_version }}|${{ matrix.variant }}|
+        ${{ matrix.configure }}|${{ matrix.prepare }}|${{ matrix.name }}
+      #~ Base name for this setup's result files.  Overridden below with
+      #~ `<sanitised-name>-<base>-<hash>` (hash is always appended).
       FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
 
-      - name: Sanitise custom job name for filenames
-        if: matrix.name
+      - name: Compute unique build fingerprint
         shell: bash
         run: |
+          #~ Hash every field of the matrix entry so distinct setups never
+          #~ collide, even when arch/toolchain/perl versions are identical.
+          if command -v python3 >/dev/null 2>&1; then
+            id=$(printf '%s' "$IDENTITY" | python3 -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:8])')
+          elif command -v python >/dev/null 2>&1; then
+            id=$(printf '%s' "$IDENTITY" | python -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:8])')
+          else
+            id=$(printf '%s' "$IDENTITY" | perl -MDigest::SHA=sha256_hex -e 'print substr(sha256_hex(<STDIN>),0,8)')
+          fi
+          echo "JOBID=${id}" >> "$GITHUB_ENV"
           #~ Spaces and forward slashes are the most common problematic
           #~ characters in human-readable names; replace them with hyphens
           #~ so the result is safe for filenames and artifact names.
-          safe=$(printf '%s' "$RAW_NAME" | tr ' /' '-')
-          echo "FNAME=${safe}-${FNAME}" >> "$GITHUB_ENV"
+          fname="$FNAME"
+          if [ -n "$RAW_NAME" ]; then
+            safe=$(printf '%s' "$RAW_NAME" | tr ' /' '-')
+            fname="${safe}-${fname}"
+          fi
+          echo "FNAME=${fname}-${id}" >> "$GITHUB_ENV"
 
       - name: Setup MSVC
         if: matrix.toolchain == 'msvc'
@@ -211,7 +231,9 @@ jobs:
             --arg toolchain '${{ matrix.toolchain }}' \
             --arg perl '${{ steps.info.outputs.perl }}' \
             --arg variant '${{ matrix.variant }}' \
-            '{status:$status,platform:$platform,family:$family,arch:$arch,arch_short:$ashort,toolchain:$toolchain,perl:$perl,variant:$variant}' \
+            --arg name "$RAW_NAME" \
+            --arg id "$JOBID" \
+            '{status:$status,platform:$platform,family:$family,arch:$arch,arch_short:$ashort,toolchain:$toolchain,perl:$perl,variant:$variant,name:$name,id:$id}' \
             > "$FNAME.json"
 
       - name: Upload build status artifact

@@ -45,7 +45,7 @@ jobs:
           multi_perl="$(jq -r '.perl // ""' results/*.json | sed '/^$/d' | sort -u | wc -l)"
 
           #~ Flatten metadata: family, arch_short, toolchain, perl, variant,
-          #~ status, platform, arch
+          #~ status, platform, arch, name, id
           flat="$(mktemp)"
           trap 'rm -f "$flat"' EXIT
           #~ Empty fields become '-': plain TSV reads collapse runs of tabs,
@@ -54,7 +54,9 @@ jobs:
             jq -r '[(.family//"-"),(.arch_short//"-"),(.toolchain//"-"),
                     ((.perl//"")|if .=="" then "-" else . end),
                     ((.variant//"")|if .=="" then "-" else . end),
-                    (.status//"-"),(.platform//"-"),(.arch//"-")] | @tsv' "$f" >> "$flat"
+                    (.status//"-"),(.platform//"-"),(.arch//"-"),
+                    ((.name//"")|if .=="" then "-" else . end),
+                    ((.id//"")|if .=="" then "-" else . end)] | @tsv' "$f" >> "$flat"
           done
 
           order=("Linux" "macOS" "Windows" "FreeBSD" "OpenBSD" "NetBSD" "DragonFly BSD" "Solaris" "OmniOS")
@@ -75,7 +77,7 @@ jobs:
             echo "### $fam" >> "$SUMMARY_MD"
             #~ Process substitution (not a pipe) keeps the loop in this shell,
             #~ so the JSON comma bookkeeping below works.
-            while IFS=$'\t' read -r family ashort toolchain pver variant st plat arch; do
+            while IFS=$'\t' read -r family ashort toolchain pver variant st plat arch name id; do
               [ "$pver" = "-" ] && pver=""
               [ "$variant" = "-" ] && variant=""
               cfg="$ashort-$toolchain"
@@ -85,6 +87,13 @@ jobs:
               if [ -n "$variant" ]; then
                 cfg="$cfg-$variant"
               fi
+              #~ Prefer the user-defined name; fall back to the derived
+              #~ config label so unnamed setups read like before.
+              if [ -z "$name" ] || [ "$name" = "-" ]; then
+                label="$cfg"
+              else
+                label="$name"
+              fi
               if [ "$st" = "success" ]; then
                 icon=':white_check_mark:'
                 shield='👍🏽 passing'
@@ -92,13 +101,15 @@ jobs:
                 icon=':x:'
                 shield='👎🏽 failing'
               fi
-              echo "- \`$cfg\` $icon" >> "$SUMMARY_MD"
+              echo "- \`$label\` $icon" >> "$SUMMARY_MD"
               if [ "$first" = false ]; then
                 echo ',' >> "$STATUS_JSON"
               fi
-              echo "\"${plat}-${arch}-${toolchain}\": \"$shield\"" >> "$STATUS_JSON"
+              #~ id is a stable per-job hash of the full matrix entry, so
+              #~ rows are unique even when arch/toolchain/perl match.
+              printf '"%s": {"name": "%s", "status": "%s"}' "$id" "$label" "$shield" >> "$STATUS_JSON"
               first=false
-            done < <(sort -t$'\t' -k2,2 -k3,3 -k4,4 -k5,5 <<<"$rows")
+            done < <(sort -t$'\t' -k2,2 -k3,3 -k4,4 -k5,5 -k9,9 -k10,10 <<<"$rows")
           done
           echo '}' >> "$STATUS_JSON"
 
