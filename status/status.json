@@ -1,63 +1,32 @@
 {
-"ubuntu-aarch64-clang": "👍🏽 passing"
-,
-"ubuntu-aarch64-gcc": "👍🏽 passing"
-,
-"ubuntu-riscv64-clang": "👍🏽 passing"
-,
-"ubuntu-riscv64-gcc": "👍🏽 passing"
-,
-"ubuntu-x86_64-clang": "👍🏽 passing"
-,
-"ubuntu-x86_64-gcc": "👍🏽 passing"
-,
-"macos-aarch64-clang": "👍🏽 passing"
-,
-"macos-aarch64-gcc": "👍🏽 passing"
-,
-"macos-x86_64-clang": "👍🏽 passing"
-,
-"macos-x86_64-gcc": "👍🏽 passing"
-,
-"windows-aarch64-clang": "👍🏽 passing"
-,
-"windows-aarch64-gcc": "👍🏽 passing"
-,
-"windows-aarch64-msvc": "👍🏽 passing"
-,
-"windows-x86_64-clang": "👍🏽 passing"
-,
-"windows-x86_64-gcc": "👍🏽 passing"
-,
-"windows-x86_64-msvc": "👍🏽 passing"
-,
-"freebsd-aarch64-clang": "👍🏽 passing"
-,
-"freebsd-aarch64-gcc": "👍🏽 passing"
-,
-"freebsd-x86_64-clang": "👍🏽 passing"
-,
-"freebsd-x86_64-gcc": "👍🏽 passing"
-,
-"openbsd-aarch64-clang": "👍🏽 passing"
-,
-"openbsd-aarch64-egcc": "👍🏽 passing"
-,
-"openbsd-riscv64-clang": "👍🏽 passing"
-,
-"openbsd-riscv64-egcc": "👍🏽 passing"
-,
-"openbsd-x86_64-clang": "👍🏽 passing"
-,
-"openbsd-x86_64-egcc": "👍🏽 passing"
-,
-"netbsd-aarch64-gcc": "👍🏽 passing"
-,
-"netbsd-x86_64-gcc": "👍🏽 passing"
-,
-"dragonflybsd-x86_64-gcc": "👍🏽 passing"
-,
-"solaris-x86_64-gcc": "👍🏽 passing"
-,
-"omnios-x86_64-gcc": "👍🏽 passing"
-}
+"57f506f8": {"name": "a64-clang-v5.38.2", "status": "👍🏽 passing"},
+"030144a3": {"name": "a64-gcc-v5.38.2", "status": "👍🏽 passing"},
+"70215e23": {"name": "r64-clang-v5.38.2", "status": "👍🏽 passing"},
+"72cd3758": {"name": "r64-gcc-v5.38.2", "status": "👍🏽 passing"},
+"b795cbe4": {"name": "x64-clang-v5.38.2", "status": "👍🏽 passing"},
+"f5440ba6": {"name": "x64-gcc-v5.38.2", "status": "👍🏽 passing"},
+"44976837": {"name": "a64-clang-v5.44.0", "status": "👍🏽 passing"},
+"6a9fe8eb": {"name": "a64-gcc-v5.44.0", "status": "👍🏽 passing"},
+"fec2807a": {"name": "x64-clang-v5.44.0", "status": "👍🏽 passing"},
+"208f69fb": {"name": "x64-gcc-v5.44.0", "status": "👍🏽 passing"},
+"748118d0": {"name": "a64-clang-v5.42.3", "status": "👍🏽 passing"},
+"467f7112": {"name": "a64-gcc-v5.42.3", "status": "👍🏽 passing"},
+"10959930": {"name": "a64-msvc-v5.42.3", "status": "👍🏽 passing"},
+"2730a54f": {"name": "x64-clang-v5.42.3", "status": "👍🏽 passing"},
+"aa4ead78": {"name": "x64-gcc-v5.42.3", "status": "👍🏽 passing"},
+"976d5440": {"name": "x64-msvc-v5.42.3", "status": "👍🏽 passing"},
+"441a1d40": {"name": "a64-clang-v5.42.3", "status": "👍🏽 passing"},
+"21bac4cc": {"name": "a64-gcc-v5.42.3", "status": "👍🏽 passing"},
+"6ced67b8": {"name": "x64-clang-v5.42.3", "status": "👍🏽 passing"},
+"ab356d8d": {"name": "x64-gcc-v5.42.3", "status": "👍🏽 passing"},
+"844576a0": {"name": "a64-clang-v5.40.1", "status": "👍🏽 passing"},
+"2d7a33a6": {"name": "a64-egcc-v5.40.1", "status": "👍🏽 passing"},
+"fff4d54e": {"name": "r64-clang-v5.40.1", "status": "👍🏽 passing"},
+"9365c233": {"name": "r64-egcc-v5.40.1", "status": "👍🏽 passing"},
+"f949aab7": {"name": "x64-clang-v5.40.1", "status": "👍🏽 passing"},
+"df021529": {"name": "x64-egcc-v5.40.1", "status": "👍🏽 passing"},
+"02fc0c04": {"name": "a64-gcc-v5.42.3", "status": "👍🏽 passing"},
+"5cf9e069": {"name": "x64-gcc-v5.42.3", "status": "👍🏽 passing"},
+"95a09e77": {"name": "x64-gcc-v5.36.3", "status": "👍🏽 passing"},
+"af4b0001": {"name": "x64-gcc-v5.38.4", "status": "👍🏽 passing"},
+"3770a7e4": {"name": "x64-gcc-v5.42.2", "status": "👍🏽 passing"}}
