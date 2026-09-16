@@ -9,7 +9,8 @@ on:
       matrix:
         description: >
           JSON array of setups for this OS family. Item fields:
-          platform_name (required), os (required), arch (required),
+          platform_name (required), os (required), arch (required).
+          Optional fields: name (overrides the auto-generated job name),
           toolchain, prepare, variant, perl_version, configure. The os
           selects the VM image.
         required: true
@@ -31,7 +32,7 @@ on:
 
 jobs:
   run:
-    name: ${{ (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+    name: ${{ matrix.name || format('{0}-{1}{2}{3}', (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch, matrix.toolchain, matrix.perl_version && format('-v{0}', matrix.perl_version) || '', matrix.variant && format('-{0}', matrix.variant) || '') }}
     runs-on: ${{ inputs.host_os || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -43,7 +44,7 @@ jobs:
       #~ Authorization: Bearer header when GITHUB_TOKEN is set.
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       #~ Unique base name for this setup's result files
-      FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+      FNAME: ${{ matrix.name && format('{0}-', matrix.name) || '' }}${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
