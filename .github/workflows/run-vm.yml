@@ -29,6 +29,13 @@ on:
           coverage build when omitted. Applies to every setup in the matrix.
         required: false
         type: string
+      checkout_submodules:
+        description: >
+          Fetch submodules during checkout. Set to 'recursive' to include
+          nested submodules. Empty (the default) fetches none.
+        required: false
+        type: string
+        default: ''
 
 jobs:
   run:
@@ -59,6 +66,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6.0.0
+        with:
+          submodules: ${{ inputs.checkout_submodules }}
 
       - name: Compute unique build fingerprint
         shell: bash
