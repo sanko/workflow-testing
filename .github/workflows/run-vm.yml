@@ -123,6 +123,7 @@ jobs:
           #~ Usage: ci_build_perl <full-version> [extra ./Configure flags...]
           ci_build_perl() {
             ver="$1"; shift
+            start="$(pwd)"
             prefix="$(pwd)/perl-dist"
             url="https://www.cpan.org/src/5.0/perl-${ver}.tar.gz"
             echo "Fetching ${url}"
@@ -176,6 +177,10 @@ jobs:
               echo "!! ci_build_perl: ${prefix}/bin/perl missing after install" >&2
               exit 1
             fi
+            #~ Leave the build tree: the caller's task runs from the workspace
+            #~ root, and a leftover cwd inside perl-${ver} made `cpanm .`
+            #~ configure perl's own source instead of the module under test.
+            cd "${start}" || { echo "!! ci_build_perl: cannot cd back to ${start}" >&2; exit 1; }
             echo "== perl-${ver} built and installed OK"
           }
           EOF
