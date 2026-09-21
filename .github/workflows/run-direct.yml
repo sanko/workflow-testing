@@ -184,12 +184,21 @@ jobs:
         shell: bash
         run: |
           #~ git-bash re-injects /usr/bin (MSYS2 perl) ahead of GITHUB_PATH, so
-          #~ the env-level Strawberry prepend above is invisible to this shell.
-          #~ Re-assert Strawberry first here so task's perl/cpanm/Build resolve
+          #~ the env-level prepends above are invisible to this shell. Re-assert
+          #~ the right toolchain first here so task's perl/cpanm/Build resolve
           #~ to it instead of the MSYS build (which lacks dual-life ExtUtils
           #~ modules). Only meaningful on Windows hosted runners.
           if [ "$RUNNER_OS" = "Windows" ]; then
-            export PATH="/c/Strawberry/perl/site/bin:/c/Strawberry/perl/bin:/c/Strawberry/c/bin:$PATH"
+            if [ "${{ matrix.toolchain }}" = "msvc" ] && [ -x /c/Perl/bin/perl.exe ]; then
+              #~ MSVC leg: prefer the freshly built MSVC perl, and put the VS
+              #~ toolchain first so cl AND link resolve to MSVC (git-bash puts
+              #~ /usr/bin ahead of the VS bin dir, shadowing link.exe with the
+              #~ MSYS coreutils link, which fails on "-out:...").
+              msb="$(cygpath -u "$VCToolsInstallDir")bin/Hostx64/x64"
+              export PATH="$msb:/c/Perl/bin:$PATH"
+            else
+              export PATH="/c/Strawberry/perl/site/bin:/c/Strawberry/perl/bin:/c/Strawberry/c/bin:$PATH"
+            fi
           fi
           ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
