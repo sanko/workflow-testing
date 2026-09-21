@@ -126,36 +126,57 @@ jobs:
             prefix="$(pwd)/perl-dist"
             url="https://www.cpan.org/src/5.0/perl-${ver}.tar.gz"
             echo "Fetching ${url}"
-            (
-              set -e
-              if command -v curl >/dev/null 2>&1; then
-                curl -fL --retry 3 -o perl.tar.gz "${url}"
-              elif command -v wget >/dev/null 2>&1; then
-                wget -qO perl.tar.gz "${url}"
-              elif command -v fetch >/dev/null 2>&1; then
-                fetch -o perl.tar.gz "${url}"
-              else
-                ftp -o perl.tar.gz "${url}"
+            #~ No bare `set -e` here: a silent subshell exit turns a failed
+            #~ configure/make into a mysteriously empty log. Every stage
+            #~ reports its own explicit failure instead, so a broken build
+            #~ always names the step (and exit code) that died.
+            download() {
+              if command -v curl >/dev/null 2>&1; then curl -fL --retry 3 -o perl.tar.gz "${url}"
+              elif command -v wget >/dev/null 2>&1; then wget -qO perl.tar.gz "${url}"
+              elif command -v fetch >/dev/null 2>&1; then fetch -o perl.tar.gz "${url}"
+              else ftp -o perl.tar.gz "${url}"
               fi
-              rm -rf "perl-${ver}"
-              gzip -dc perl.tar.gz | tar -xf -
-              cd "perl-${ver}"
-              MAKE=make
-              command -v gmake >/dev/null 2>&1 && MAKE=gmake
-              sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none "$@"
-              #~ Build perl serially. perl's source build recurses into
-              #~ per-module subdirs whose nested make picks up gmake 4.4's
-              #~ --jobserver-auth token from MAKEFLAGS and mis-parses it as
-              #~ "-j observer-auth=..." , aborting with "argument ... to option
-              #~ '-j' must be a positive number" on FreeBSD/other *BSD (the
-              #~ nested make is the OS/bundled make, not gmake). Any -jN spawns
-              #~ the jobserver, so the only reliable fix is a serial build. It
-              #~ is a one-time cost: the result is cached in perl-dist.
-              "${MAKE}"
-              "${MAKE}" install
-              #~ Sentinel: never report success without a built perl binary.
-              [ -x "${prefix}/bin/perl" ]
-            )
+            }
+            download "${url}"
+            rc=$?
+            [ "$rc" -eq 0 ] || { echo "!! ci_build_perl: fetching ${url} failed (exit ${rc})" >&2; exit 1; }
+            rm -rf "perl-${ver}"
+            gzip -dc perl.tar.gz > "perl-${ver}.tar"
+            rc=$?
+            [ "$rc" -eq 0 ] || { echo "!! ci_build_perl: gunzip perl.tar.gz failed (exit ${rc})" >&2; exit 1; }
+            tar -xf "perl-${ver}.tar"
+            rc=$?
+            [ "$rc" -eq 0 ] || { echo "!! ci_build_perl: extracting perl-${ver}.tar failed (exit ${rc})" >&2; exit 1; }
+            rm -f "perl-${ver}.tar"
+            cd "perl-${ver}" || { echo "!! ci_build_perl: cannot cd into perl-${ver}" >&2; exit 1; }
+            MAKE=make
+            command -v gmake >/dev/null 2>&1 && MAKE=gmake
+            echo "== configuring perl-${ver} (make=${MAKE}, extra flags: $*)"
+            sh Configure -des "-Dprefix=${prefix}" -Dman1dir=none -Dman3dir=none "$@"
+            rc=$?
+            [ "$rc" -eq 0 ] || { echo "!! ci_build_perl: Configure FAILED (exit ${rc})" >&2; exit 1; }
+            echo "== Configure OK; building (serial, see jobserver comment below)"
+            #~ Build perl serially. perl's source build recurses into
+            #~ per-module subdirs whose nested make picks up gmake 4.4's
+            #~ --jobserver-auth token from MAKEFLAGS and mis-parses it as
+            #~ "-j observer-auth=..." , aborting with "argument ... to option
+            #~ '-j' must be a positive number" on FreeBSD/other *BSD (the
+            #~ nested make is the OS/bundled make, not gmake). Any -jN spawns
+            #~ the jobserver, so the only reliable fix is a serial build. It
+            #~ is a one-time cost: the result is cached in perl-dist.
+            "${MAKE}"
+            rc=$?
+            [ "$rc" -eq 0 ] || { echo "!! ci_build_perl: make FAILED (exit ${rc})" >&2; exit 1; }
+            echo "== make OK; installing to ${prefix}"
+            "${MAKE}" install
+            rc=$?
+            [ "$rc" -eq 0 ] || { echo "!! ci_build_perl: make install FAILED (exit ${rc})" >&2; exit 1; }
+            #~ Sentinel: never report success without a built perl binary.
+            if [ ! -x "${prefix}/bin/perl" ]; then
+              echo "!! ci_build_perl: ${prefix}/bin/perl missing after install" >&2
+              exit 1
+            fi
+            echo "== perl-${ver} built and installed OK"
           }
           EOF
 
