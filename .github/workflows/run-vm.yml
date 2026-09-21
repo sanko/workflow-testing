@@ -327,6 +327,34 @@ jobs:
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
             ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
+      - name: Build and Test in Haiku
+        if: matrix.os == 'haiku'
+        uses: vmactions/haiku-vm@v1.1.5
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+
       #~ - name: Upload coverage reports to Codecov
         #~ uses: codecov/codecov-action@v5
         #~ with:
@@ -348,6 +376,7 @@ jobs:
             dragonflybsd)  family='DragonFly BSD' ;;
             solaris)       family='Solaris' ;;
             omnios)        family='OmniOS' ;;
+            haiku)         family='Haiku' ;;
             *)             family="${{ matrix.os }}" ;;
           esac
           case "${{ matrix.arch }}" in
