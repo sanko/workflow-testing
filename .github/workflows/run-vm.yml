@@ -36,9 +36,18 @@ on:
         required: false
         type: string
         default: ''
+      continue_on_error:
+        description: >
+          Report failed matrix entries without failing the caller's run.
+          Experimental legs stay visible in their own jobs while the
+          calling workflow reads green. Defaults off.
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   run:
+    continue-on-error: ${{ inputs.continue_on_error }}
     name: ${{ matrix.name || format('{0}-{1}{2}{3}', (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch, matrix.toolchain, matrix.perl_version && format('-v{0}', matrix.perl_version) || '', matrix.variant && format('-{0}', matrix.variant) || '') }}
     runs-on: ${{ inputs.host_os || 'ubuntu-latest' }}
     strategy:
@@ -94,7 +103,7 @@ jobs:
 
       #~ Strict cache key: every component that changes the produced binary
       #~ is in the key, so a hit always means "this exact perl". No loose
-      #~ restore-keys — restoring a differently-configured build would be
+      #~ restore-keys: restoring a differently-configured build would be
       #~ worse than rebuilding. The VM syncs perl-dist in before its run
       #~ blocks and back out afterwards, so host-side caching just works.
       - name: Compute perl cache key

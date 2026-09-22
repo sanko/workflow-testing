@@ -127,7 +127,7 @@ jobs:
 
       #~ Strict cache key: every component that changes the produced binary
       #~ is in the key, so a hit always means "this exact perl". No loose
-      #~ restore-keys — restoring a differently-configured build would be
+      #~ restore-keys: restoring a differently-configured build would be
       #~ worse than rebuilding.
       - name: Compute perl cache key
         if: matrix.perl_version != ''
