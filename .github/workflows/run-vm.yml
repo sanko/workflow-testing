@@ -220,9 +220,19 @@ jobs:
             fi
             #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
             #~ Surface any in-VM crash report even when the task failed.
             cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
 
       - name: Build and Test in OpenBSD
         if: matrix.os == 'openbsd'
@@ -250,9 +260,19 @@ jobs:
             fi
             #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
             #~ Surface any in-VM crash report even when the task failed.
             cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
 
       - name: Build and Test in NetBSD
         if: matrix.os == 'netbsd'
@@ -280,9 +300,19 @@ jobs:
             fi
             #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
             #~ Surface any in-VM crash report even when the task failed.
             cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
 
       - name: Build and Test in DragonflyBSD
         if: matrix.os == 'dragonflybsd'
@@ -310,9 +340,19 @@ jobs:
             fi
             #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
             #~ Surface any in-VM crash report even when the task failed.
             cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
 
       - name: Build and Test in Solaris
         if: matrix.os == 'solaris'
@@ -340,9 +380,19 @@ jobs:
             fi
             #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
             #~ Surface any in-VM crash report even when the task failed.
             cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
 
       - name: Build and Test in OmniOS
         if: matrix.os == 'omnios'
@@ -370,9 +420,19 @@ jobs:
             fi
             #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
             #~ Surface any in-VM crash report even when the task failed.
             cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
 
       - name: Build and Test in Haiku
         if: matrix.os == 'haiku'
@@ -400,9 +460,19 @@ jobs:
             fi
             #~ Capture the perl version inside the VM for the host info step.
             perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
-            ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
             #~ Surface any in-VM crash report even when the task failed.
             cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
 
       #~ - name: Upload coverage reports to Codecov
         #~ uses: codecov/codecov-action@v5
