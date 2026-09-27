@@ -32,7 +32,7 @@
 - `x64-egcc-v5.40.1` :white_check_mark:
 ### NetBSD
 - `a64-gcc-v5.42.3` :white_check_mark:
-- `x64-gcc-v5.42.3` :white_check_mark:
+- `x64-gcc-v5.44.0` :white_check_mark:
 ### DragonFly BSD
 - `x64-gcc-v5.36.3` :white_check_mark:
 ### Solaris
