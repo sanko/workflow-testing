@@ -254,7 +254,10 @@ jobs:
           EVENT_NAME: '${{ github.event_name }}'
           REF_NAME: '${{ github.ref_name }}'
           SHA: '${{ github.sha }}'
-          COMMIT_TITLE: '${{ github.event.head_commit.message || github.event.pull_request.title || '' }}'
+          #~ Double-quoted: an empty-string literal inside would terminate a
+          #~ single-quoted YAML string early and leave an unterminated
+          #~ expression, which fails workflow validation with no jobs at all.
+          COMMIT_TITLE: "${{ github.event.head_commit.message || github.event.pull_request.title || '' }}"
         run: |
           mkdir -p status
           WORK="${RUNNER_TEMP:-/tmp}/results-summary"

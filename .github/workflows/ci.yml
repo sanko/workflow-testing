@@ -60,7 +60,10 @@ jobs:
         id: parse_tags
         shell: bash
         env:
-          COMMIT_MSG: '${{ github.event.head_commit.message || github.event.pull_request.title || '' }}'
+          #~ Double-quoted: an empty-string literal inside would terminate a
+          #~ single-quoted YAML string early and leave an unterminated
+          #~ expression, which fails workflow validation with no jobs at all.
+          COMMIT_MSG: "${{ github.event.head_commit.message || github.event.pull_request.title || '' }}"
           DISPATCH_RUNNER: '${{ github.event.inputs.runner }}'
           DISPATCH_TEST: '${{ github.event.inputs.test_files }}'
           DISPATCH_FEED: '${{ github.event.inputs.feed }}'
