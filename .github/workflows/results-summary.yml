@@ -12,6 +12,19 @@ on:
         required: false
         type: string
         default: 'Build and Test Summary'
+      runner:
+        description: >
+          Space-padded list of the families this run selected, as produced by
+          the caller's setup job. Families missing from the list were filtered
+          out and are reported as skipped rather than failed.
+        required: false
+        type: string
+        default: ''
+      test_files:
+        description: 'Test file pattern this run applied, if any'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   summarize:
@@ -27,11 +40,21 @@ jobs:
 
       - name: Generate grouped summary
         shell: bash
+        env:
+          TITLE: '${{ inputs.title }}'
+          #~ Interpolation-safe: never expanded into the script text.
+          RUNNER: '${{ inputs.runner }}'
+          TEST_FILES: '${{ inputs.test_files }}'
         run: |
           mkdir -p status
           SUMMARY_MD="status/status.md"
           STATUS_JSON="status/status.json"
-          echo "## ${{ inputs.title }}" > "$SUMMARY_MD"
+          echo "## $TITLE" >> "$SUMMARY_MD"
+
+          if [ -n "$TEST_FILES" ]; then
+            echo "" >> "$SUMMARY_MD"
+            echo "Test pattern: \`$TEST_FILES\`" >> "$SUMMARY_MD"
+          fi
 
           if ! compgen -G "results/*.json" > /dev/null; then
             echo "_No result data found._ :x:" >> "$SUMMARY_MD"
@@ -43,6 +66,25 @@ jobs:
           #~ The perl version suffix only appears when more than one distinct
           #~ perl version was seen across all entries.
           multi_perl="$(jq -r '.perl // ""' results/*.json | sed '/^$/d' | sort -u | wc -l)"
+
+          #~ The Perl column only earns its place in a multi-perl run; in a
+          #~ single-perl run it would repeat the same value on every row.
+          print_header() {
+            if [ "$multi_perl" -gt 1 ]; then
+              printf '| Setup | Toolchain | Perl | Result |\n|:---|:---|:---|:---|\n' >> "$SUMMARY_MD"
+            else
+              printf '| Setup | Toolchain | Result |\n|:---|:---|:---|\n' >> "$SUMMARY_MD"
+            fi
+          }
+
+          print_row() {
+            local setup="$1" toolchain="$2" perl="$3" cell="$4"
+            if [ "$multi_perl" -gt 1 ]; then
+              printf '| %s | %s | %s | %s |\n' "$setup" "$toolchain" "${perl:--}" "$cell" >> "$SUMMARY_MD"
+            else
+              printf '| %s | %s | %s |\n' "$setup" "$toolchain" "$cell" >> "$SUMMARY_MD"
+            fi
+          }
 
           #~ Flatten metadata: family, arch_short, toolchain, perl, variant,
           #~ status, platform, arch, name, id
@@ -73,26 +115,37 @@ jobs:
           echo '{' > "$STATUS_JSON"
           for fam in "${order[@]}"; do
             rows="$(awk -F'\t' -v fam="$fam" '$1==fam' "$flat")"
-            [ -z "$rows" ] && continue
             echo "### $fam" >> "$SUMMARY_MD"
+            print_header
+            if [ -z "$rows" ]; then
+              #~ No rows at all: either the run filtered this family out, or it
+              #~ was selected and went silent. Only the former is "skipped".
+              if [[ " $RUNNER " == *" $fam "* ]]; then
+                print_row 'all setups' '-' '-' ':x: no results reported'
+              else
+                print_row 'all setups' '-' '-' ':fast_forward: not selected by runner filter'
+              fi
+              continue
+            fi
             #~ Process substitution (not a pipe) keeps the loop in this shell,
             #~ so the JSON comma bookkeeping below works.
             while IFS=$'\t' read -r family ashort toolchain pver variant st plat arch name id; do
               [ "$pver" = "-" ] && pver=""
               [ "$variant" = "-" ] && variant=""
-              cfg="$ashort-$toolchain"
-              if [ "$multi_perl" -gt 1 ] && [ -n "$pver" ]; then
-                cfg="$cfg-$pver"
-              fi
-              if [ -n "$variant" ]; then
-                cfg="$cfg-$variant"
-              fi
-              #~ Prefer the user-defined name; fall back to the derived
-              #~ config label so unnamed setups read like before.
+              #~ Prefer the user-defined name; fall back to the architecture so
+              #~ unnamed setups still read clearly next to it.
               if [ -z "$name" ] || [ "$name" = "-" ]; then
-                label="$cfg"
+                case "$ashort" in
+                  x64) label='Intel' ;;
+                  a64) label='ARM' ;;
+                  r64) label='RISC-V' ;;
+                  *)   label="$ashort" ;;
+                esac
               else
                 label="$name"
+              fi
+              if [ -n "$variant" ]; then
+                label="$label ($variant)"
               fi
               if [ "$st" = "success" ]; then
                 icon=':white_check_mark:'
@@ -101,7 +154,7 @@ jobs:
                 icon=':x:'
                 shield='👎🏽 failing'
               fi
-              echo "- \`$label\` $icon" >> "$SUMMARY_MD"
+              print_row "$label" "$toolchain" "${pver#v}" "$icon"
               if [ "$first" = false ]; then
                 echo ',' >> "$STATUS_JSON"
               fi

@@ -5,7 +5,18 @@ on:
   push: ~
   schedule:
     - cron: '42 5 * * 0'
-  workflow_dispatch: ~
+  #~ Manual runs may carry the same selectors as a commit tag. These win over
+  #~ whatever the commit message says.
+  workflow_dispatch:
+    inputs:
+      runner:
+        default: all
+        description: 'Runners to execute, comma-separated (e.g. "freebsd,linux" or "linux#arm,openbsd#riscv"). See the [runner:...] tag below.'
+        type: string
+      test_files:
+        default: ''
+        description: 'Test file pattern to run (e.g. t/3000_jenny/3500_isolate/*.t). See the [test:...] tag below.'
+        type: string
 
 permissions:
   contents: read
@@ -14,8 +25,160 @@ permissions:
 
 jobs:
 
+  #~ Commit message filtering.
+  #~
+  #~ A commit message (or, for pull requests, the PR title) may carry two tags:
+  #~
+  #~   [runner:freebsd,linux#arm]      only these OS families run
+  #~   [test:t/3000_jenny/*.t]         only this test pattern runs
+  #~
+  #~ `runner` takes a comma-separated list of family names, each optionally
+  #~ suffixed with `#<arch>` to run only the setups built for that
+  #~ architecture; without the suffix every setup in that family runs. `all`
+  #~ (the default) runs everything, so an untagged commit behaves exactly like
+  #~ a full run.
+  #~
+  #~ This job only decides *which* jobs run: it emits a space-padded list of
+  #~ family names that each job below tests with contains(), plus a per-family
+  #~ arch filter that run-vm.yml/run-direct.yml use to drop individual setups
+  #~ from their matrix.
+  setup:
+    name: Generate Testing Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      runner: '${{ steps.parse_tags.outputs.runner }}'
+      select: '${{ steps.parse_tags.outputs.select }}'
+      test_files: '${{ steps.parse_tags.outputs.test_files }}'
+    steps:
+      - name: Parse commit message tags for runner/test filtering
+        id: parse_tags
+        shell: bash
+        env:
+          COMMIT_MSG: '${{ github.event.head_commit.message || github.event.pull_request.title || '' }}'
+          DISPATCH_RUNNER: '${{ github.event.inputs.runner }}'
+          DISPATCH_TEST: '${{ github.event.inputs.test_files }}'
+        run: |
+          #~ Job families declared below, in report order. A tag selects whole
+          #~ families here; the arch part of a tag narrows the setups inside the
+          #~ reusable workflow.
+          FAMILIES=(freebsd openbsd netbsd dragonflybsd solaris omnios linux macos windows)
+
+          #~ Canonicalise the arch spelling accepted after `#`. Kept in step
+          #~ with the arch values used by the matrices below.
+          canon_arch() {
+            case "${1,,}" in
+              x86-64|x86_64|x64|intel|amd64) echo x86_64 ;;
+              arm|arm64|aarch64|a64)         echo aarch64 ;;
+              riscv|riscv64|r64)             echo riscv64 ;;
+            esac
+          }
+
+          RUNNER=''
+          SELECT=''
+
+          #~ Expand one runner tag into the set of families to run plus a
+          #~ per-family arch filter. RUNNER is space-padded (" freebsd linux ")
+          #~ so job gates can match whole tokens with contains() instead of
+          #~ risking a substring match.
+          expand() {
+            local input="$1" entry fam arch result='' json='' matched=''
+            local -A archs=() picked=()
+            IFS=',' read -ra parts <<< "$input"
+            for entry in "${parts[@]}"; do
+              #~ Trim surrounding whitespace, then case-fold the entry.
+              entry="${entry#"${entry%%[! ]*}"}"
+              entry="${entry%"${entry##*[! ]}"}"
+              entry="${entry,,}"
+              if [ -z "$entry" ]; then
+                continue
+              fi
+              if [ "$entry" = all ]; then
+                for fam in "${FAMILIES[@]}"; do
+                  result="$result $fam "
+                done
+                matched=yes
+                break
+              fi
+              fam="${entry%%#*}"
+              arch=''
+              if [ "$entry" != "$fam" ]; then
+                arch="${entry#*#}"
+              fi
+              #~ Fixed-string match: the tag is untrusted text, never a regex.
+              if ! printf '%s\n' "${FAMILIES[@]}" | grep -qxF -- "$fam"; then
+                echo "::warning::ignoring unknown runner '$fam' in [runner:$entry]"
+                continue
+              fi
+              matched=yes
+              #~ A tag may name a family twice (e.g. linux#arm,linux#riscv);
+              #~ list it once and merge the arch filters instead.
+              if [ -z "${picked[$fam]:-}" ]; then
+                result="$result $fam "
+                picked["$fam"]=1
+              fi
+              if [ -z "$arch" ]; then
+                continue
+              fi
+              arch="$(canon_arch "$arch")"
+              if [ -z "$arch" ]; then
+                echo "::warning::ignoring unknown arch for '$fam' in [runner:$entry]"
+              elif [[ ",${archs[$fam]:-}," == *",$arch,"* ]]; then
+                #~ An earlier entry in this tag already picked that arch.
+                :
+              else
+                archs["$fam"]="${archs[$fam]:-}${archs[$fam]:+,}$arch"
+              fi
+            done
+            #~ A tag that names nothing we know about (a typo, a renamed
+            #~ family) must not silently produce an empty run.
+            if [ -z "$matched" ]; then
+              echo "::warning::[runner:$input] selected no known runner, running everything"
+              result=''
+              for fam in "${FAMILIES[@]}"; do
+                result="$result $fam "
+              done
+            fi
+            RUNNER="$result"
+            #~ Every family gets a key, so fromJSON(select).<family> is always
+            #~ a string even when no arch filter was given.
+            for fam in "${FAMILIES[@]}"; do
+              if [ -z "$json" ]; then
+                json="\"$fam\":\"${archs[$fam]:-}\""
+              else
+                json="$json,\"$fam\":\"${archs[$fam]:-}\""
+              fi
+            done
+            SELECT="{$json}"
+          }
+
+          if [ '${{ github.event_name }}' = workflow_dispatch ]; then
+            expand "${DISPATCH_RUNNER:-all}"
+            test="$DISPATCH_TEST"
+          else
+            tag="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[runner:\K[^\]]*' || true)"
+            if [ -z "$tag" ]; then
+              tag=all
+            fi
+            expand "$tag"
+            test="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[test:\K[^\]]*' || true)"
+          fi
+
+          #~ The pattern is interpolated into shell run blocks downstream, so
+          #~ keep it to characters that mean something in a file glob and drop
+          #~ anything else rather than executing it.
+          test="$(printf '%s' "$test" | tr -cd 'A-Za-z0-9_.,-/*')"
+          echo "runner=$RUNNER" >> "$GITHUB_OUTPUT"
+          echo "select=$SELECT" >> "$GITHUB_OUTPUT"
+          echo "test_files=$test" >> "$GITHUB_OUTPUT"
+
+  #~ Every family below is gated on its own name appearing in the padded
+  #~ runner list, and hands run-vm.yml/run-direct.yml the arch filter for that
+  #~ family so unselected setups never start.
+
   freebsd:
     name: FreeBSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' freebsd ') }}"
     uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
@@ -28,9 +191,13 @@ jobs:
           {"platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"gcc","prepare":"pkg install -y perl5 lang/gcc"},
           {"platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"clang","prepare":"pkg install -y perl5 llvm"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).freebsd }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   openbsd:
     name: OpenBSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' openbsd ') }}"
     uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
@@ -45,10 +212,14 @@ jobs:
           {"platform_name":"openbsd","os":"openbsd","arch":"riscv64","toolchain":"egcc","prepare":"pkg_add gcc-11.2.0p19 g++-11.2.0p19"},
           {"platform_name":"openbsd","os":"openbsd","arch":"riscv64","toolchain":"clang"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).openbsd }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
       #~ https://openbsd.app/
 
   netbsd:
     name: NetBSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' netbsd ') }}"
     uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
@@ -59,9 +230,13 @@ jobs:
           {"platform_name":"netbsd","os":"netbsd","arch":"x86_64","toolchain":"gcc","prepare":"/usr/sbin/pkg_add perl"},
           {"platform_name":"netbsd","os":"netbsd","arch":"aarch64","toolchain":"gcc","prepare":"/usr/sbin/pkg_add perl"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).netbsd }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   dragonflybsd:
     name: DragonFly BSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' dragonflybsd ') }}"
     uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
@@ -71,9 +246,13 @@ jobs:
         [
           {"platform_name":"dragonflybsd","os":"dragonflybsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5 gcc"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).dragonflybsd }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   solaris:
     name: Solaris
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' solaris ') }}"
     uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
@@ -83,9 +262,13 @@ jobs:
         [
           {"platform_name":"solaris","os":"solaris","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -v --accept perl-538 gcc"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).solaris }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   omnios:
     name: OmniOS
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' omnios ') }}"
     uses: ./.github/workflows/run-vm.yml
     secrets: inherit
     with:
@@ -95,9 +278,13 @@ jobs:
         [
           {"platform_name":"omnios","os":"omnios","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -v --accept perl build-essential"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).omnios }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   linux:
     name: Linux
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' linux ') }}"
     uses: ./.github/workflows/run-direct.yml
     secrets: inherit
     with:
@@ -109,11 +296,15 @@ jobs:
           {"platform_name":"ubuntu","os":"ubuntu-24.04-arm","arch":"aarch64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},
           {"platform_name":"ubuntu","os":"ubuntu-24.04-arm","arch":"aarch64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y clang perl"},
           {"platform_name":"ubuntu","os":"ubuntu-24.04-riscv","arch":"riscv64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},
-          {"platform_name":"ubuntu","os":"ubuntu-24.04-riscv","arch":"riscv64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y clang perl libclang-rt-dev"}
+          {"platform_name":"ubuntu","os":"ubuntu-24.04-riscv","arch":"riscv64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl libclang-rt-dev"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).linux }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   macos:
     name: macOS
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' macos ') }}"
     uses: ./.github/workflows/run-direct.yml
     secrets: inherit
     with:
@@ -125,9 +316,13 @@ jobs:
           {"platform_name":"macos","os":"macos-15-intel","arch":"x86_64","toolchain":"gcc"},
           {"platform_name":"macos","os":"macos-15-intel","arch":"x86_64","toolchain":"clang"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).macos }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   windows:
     name: Windows
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.runner, ' windows ') }}"
     uses: ./.github/workflows/run-direct.yml
     secrets: inherit
     with:
@@ -141,13 +336,20 @@ jobs:
           {"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"clang","prepare":"choco install llvm strawberryperl"},
           {"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"msvc","prepare":"choco install opencppcoverage strawberryperl; bash"}
         ]
+      select: "${{ fromJSON(needs.setup.outputs.select).windows }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
       # Setup Strawberry Perl so the task can invoke perl under bash
 
   results:
     name: Summary
     if: always()
-    needs: [freebsd, openbsd, netbsd, dragonflybsd, solaris, omnios, linux, macos, windows]
+    needs: [setup, freebsd, openbsd, netbsd, dragonflybsd, solaris, omnios, linux, macos, windows]
     uses: ./.github/workflows/results-summary.yml
+    with:
+      #~ Lets the report distinguish "this family was filtered out of the run"
+      #~ from "this family was selected and produced nothing".
+      runner: "${{ needs.setup.outputs.runner }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
 
   publish-status:
     name: Publish Status Page

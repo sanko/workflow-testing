@@ -27,15 +27,66 @@ on:
         required: false
         type: string
         default: ''
+      select:
+        description: >
+          Comma-separated architecture filter, normally taken from the caller's
+          [runner:<os>#<arch>] tag. Empty keeps every setup in the matrix.
+        required: false
+        type: string
+        default: ''
+      test_files:
+        description: >
+          Test file pattern, normally taken from the caller's [test:...] tag.
+          Exported as $TEST_FILES for the task; tasks that do not run tests
+          ignore it.
+        required: false
+        type: string
+        default: ''
 
 jobs:
+  #~ Prune the setups the caller did not ask for. Done in its own job on a
+  #~ throwaway host runner so the (much more expensive) matrix job never
+  #~ starts for an architecture that was filtered out.
+  select:
+    name: Select setups
+    runs-on: ubuntu-latest
+    outputs:
+      include: '${{ steps.select.outputs.include }}'
+      count: '${{ steps.select.outputs.count }}'
+    steps:
+      - name: Apply architecture selection
+        id: select
+        shell: bash
+        env:
+          SELECT: '${{ inputs.select }}'
+          MATRIX: '${{ inputs.matrix }}'
+        run: |
+          #~ Mirrors the arch spellings accepted after `#` in the
+          #~ [runner:<os>#<arch>] tag (see the setup job in ci.yml). An empty
+          #~ selection keeps every setup.
+          jq -c --arg sel "$SELECT" '
+            def canon:
+              ascii_downcase
+              | if   . == "x86-64" or . == "x86_64" or . == "x64" or . == "intel" or . == "amd64" then "x86_64"
+                elif . == "arm" or . == "arm64" or . == "aarch64" or . == "a64" then "aarch64"
+                elif . == "riscv" or . == "riscv64" or . == "r64" then "riscv64"
+                else . end;
+            ($sel | split(",") | map(gsub("^\\s+|\\s+$"; "") | select(. != "") | canon)) as $want
+            | [.[] | (.arch | canon) as $a
+                   | select(($want | length) == 0 or ($want | index($a)) != null)]
+          ' <<< "$MATRIX" > include.json
+          echo "include=$(cat include.json)" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq 'length' include.json)" >> "$GITHUB_OUTPUT"
+
   run:
     name: ${{ matrix.name || format('{0}-{1}{2}{3}', (matrix.arch == 'x86_64' && 'x64') || (matrix.arch == 'aarch64' && 'a64') || (matrix.arch == 'riscv64' && 'r64') || matrix.arch, matrix.toolchain, matrix.perl_version && format('-v{0}', matrix.perl_version) || '', matrix.variant && format('-{0}', matrix.variant) || '') }}
+    needs: select
+    if: needs.select.outputs.count != '0'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.matrix) }}
+        include: ${{ fromJSON(needs.select.outputs.include) }}
     env:
       #~ Token for the GitHub API so release lookups bypass the anonymous
       #~ 60 req/hr rate limit. The builder's HTTP::Tiny sends it as an
@@ -201,6 +252,10 @@ jobs:
               export PATH="/c/Strawberry/perl/site/bin:/c/Strawberry/perl/bin:/c/Strawberry/c/bin:$PATH"
             fi
           fi
+          #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+          #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does not
+          #~ run tests.
+          ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
           ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
 
       - name: Collect environment info
