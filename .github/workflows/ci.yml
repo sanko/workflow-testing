@@ -17,6 +17,10 @@ on:
         default: ''
         description: 'Test file pattern to run (e.g. t/3000_jenny/3500_isolate/*.t). See the [test:...] tag below.'
         type: string
+      feed:
+        default: ''
+        description: 'Machine-readable result feeds to emit alongside the tables: "json", "rss", or "json,rss". See the [feed:...] tag below.'
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +35,7 @@ jobs:
   #~
   #~   [runner:freebsd,linux#arm]      only these OS families run
   #~   [test:t/3000_jenny/*.t]         only this test pattern runs
+  #~   [feed:json,rss]                 also publish machine-readable feeds
   #~
   #~ `runner` takes a comma-separated list of family names, each optionally
   #~ suffixed with `#<arch>` to run only the setups built for that
@@ -49,6 +54,7 @@ jobs:
       runner: '${{ steps.parse_tags.outputs.runner }}'
       select: '${{ steps.parse_tags.outputs.select }}'
       test_files: '${{ steps.parse_tags.outputs.test_files }}'
+      feed: '${{ steps.parse_tags.outputs.feed }}'
     steps:
       - name: Parse commit message tags for runner/test filtering
         id: parse_tags
@@ -57,6 +63,7 @@ jobs:
           COMMIT_MSG: '${{ github.event.head_commit.message || github.event.pull_request.title || '' }}'
           DISPATCH_RUNNER: '${{ github.event.inputs.runner }}'
           DISPATCH_TEST: '${{ github.event.inputs.test_files }}'
+          DISPATCH_FEED: '${{ github.event.inputs.feed }}'
         run: |
           #~ Job families declared below, in report order. A tag selects whole
           #~ families here; the arch part of a tag narrows the setups inside the
@@ -154,6 +161,7 @@ jobs:
           if [ '${{ github.event_name }}' = workflow_dispatch ]; then
             expand "${DISPATCH_RUNNER:-all}"
             test="$DISPATCH_TEST"
+            feed="$DISPATCH_FEED"
           else
             tag="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[runner:\K[^\]]*' || true)"
             if [ -z "$tag" ]; then
@@ -161,15 +169,38 @@ jobs:
             fi
             expand "$tag"
             test="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[test:\K[^\]]*' || true)"
+            feed="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[feed:\K[^\]]*' || true)"
           fi
 
           #~ The pattern is interpolated into shell run blocks downstream, so
           #~ keep it to characters that mean something in a file glob and drop
           #~ anything else rather than executing it.
           test="$(printf '%s' "$test" | tr -cd 'A-Za-z0-9_.,-/*')"
+
+          #~ [feed:...] only names formats from a fixed vocabulary, so matching
+          #~ whole tokens is the whole sanitisation: an unknown word is dropped
+          #~ with a warning and never reaches a filename. The list is space
+          #~ padded for the same reason as the runner list, and is empty when
+          #~ the tag is absent, which is what keeps the feed steps off.
+          FEED=''
+          IFS=',' read -ra formats <<< "$feed"
+          for entry in "${formats[@]}"; do
+            entry="${entry#"${entry%%[! ]*}"}"
+            entry="${entry%"${entry##*[! ]}"}"
+            entry="${entry,,}"
+            if [ -z "$entry" ]; then
+              continue
+            fi
+            case "$entry" in
+              json|rss) FEED="$FEED $entry " ;;
+              *) echo "::warning::ignoring unknown feed format '$entry' in [feed:$feed]" ;;
+            esac
+          done
+
           echo "runner=$RUNNER" >> "$GITHUB_OUTPUT"
           echo "select=$SELECT" >> "$GITHUB_OUTPUT"
           echo "test_files=$test" >> "$GITHUB_OUTPUT"
+          echo "feed=$FEED" >> "$GITHUB_OUTPUT"
 
   #~ Every family below is gated on its own name appearing in the padded
   #~ runner list, and hands run-vm.yml/run-direct.yml the arch filter for that
@@ -350,6 +381,7 @@ jobs:
       #~ from "this family was selected and produced nothing".
       runner: "${{ needs.setup.outputs.runner }}"
       test_files: "${{ needs.setup.outputs.test_files }}"
+      feed: "${{ needs.setup.outputs.feed }}"
 
   publish-status:
     name: Publish Status Page

@@ -25,6 +25,14 @@ on:
         required: false
         type: string
         default: ''
+      feed:
+        description: >
+          Space-padded list of machine-readable formats to emit alongside the
+          tables, as produced by the caller's setup job. One of "json" (a full
+          result document) or "rss" (one item per setup). Empty emits neither.
+        required: false
+        type: string
+        default: ''
 
 jobs:
   summarize:
@@ -56,9 +64,57 @@ jobs:
             echo "Test pattern: \`$TEST_FILES\`" >> "$SUMMARY_MD"
           fi
 
+          #~ Ordered family list, also used to report families that said
+          #~ nothing. Defined before the no-data check because that path still
+          #~ has to say which families went missing. Only families ci.yml can
+          #~ actually select belong here: a family listed here but absent from
+          #~ the runner list is reported as "not selected", so listing one that
+          #~ ci.yml cannot select (haiku, as of this writing) would print a
+          #~ misleading row on every full run. Unanticipated families are
+          #~ appended alphabetically further down.
+          order=("Linux" "macOS" "Windows" "FreeBSD" "OpenBSD" "NetBSD" "DragonFly BSD" "Solaris" "OmniOS")
+
+          #~ The caller's padded runner list is spelled with the internal job
+          #~ names (linux, dragonflybsd) while the report groups by display name
+          #~ (Linux, DragonFly BSD), so normalise before asking whether a family
+          #~ ran. Comparing the display names directly never matches, which would
+          #~ report every silent family as "filtered out".
+          selected() {
+            local name="${1,,}"
+            if [ "$name" = 'dragonfly bsd' ]; then
+              name=dragonflybsd
+            fi
+            [[ " $RUNNER " == *" $name "* ]]
+          }
+
+          #~ Scratch handoff for the feed step, which is a pure format
+          #~ converter over this file. It lives in the runner's temp dir so it
+          #~ never reaches the published status/ directory.
+          WORK="${RUNNER_TEMP:-/tmp}/results-summary"
+          FEED_ROWS="$WORK/feed.tsv"
+          mkdir -p "$WORK"
+          : > "$FEED_ROWS"
+
+          #~ One feed record for a family that reported no rows at all, so a
+          #~ consumer can tell "filtered out of the run" from "selected and
+          #~ silent" without parsing prose.
+          missing_family() {
+            local fam="$1" fstatus
+            if selected "$fam"; then
+              fstatus='no_results'
+            else
+              fstatus='skipped'
+            fi
+            printf '%s\t%s\t-\t-\t-\t-\t-\t-\t-\t%s\t-\n' \
+              "$fam" 'all setups' "$fstatus" >> "$FEED_ROWS"
+          }
+
           if ! compgen -G "results/*.json" > /dev/null; then
             echo "_No result data found._ :x:" >> "$SUMMARY_MD"
             printf '{\n}\n' > "$STATUS_JSON"
+            for fam in "${order[@]}"; do
+              missing_family "$fam"
+            done
             cat "$SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -93,15 +149,13 @@ jobs:
           #~ Empty fields become '-': plain TSV reads collapse runs of tabs,
           #~ which would silently shift every following column.
           for f in results/*.json; do
-            jq -r '[(.family//"-"),(.arch_short//"-"),(.toolchain//"-"),
-                    ((.perl//"")|if .=="" then "-" else . end),
-                    ((.variant//"")|if .=="" then "-" else . end),
-                    (.status//"-"),(.platform//"-"),(.arch//"-"),
-                    ((.name//"")|if .=="" then "-" else . end),
-                    ((.id//"")|if .=="" then "-" else . end)] | @tsv' "$f" >> "$flat"
+            jq -r 'def cell: gsub("[\t\r\n]"; " ") | if . == "" then "-" else . end;
+                   [(.family//"-" | cell),(.arch_short//"-" | cell),(.toolchain//"-" | cell),
+                    ((.perl//"")|cell),((.variant//"")|cell),
+                    ((.status//"")|cell),(.platform//"-" | cell),(.arch//"-" | cell),
+                    ((.name//"")|cell),((.id//"")|cell)] | @tsv' "$f" >> "$flat"
           done
 
-          order=("Linux" "macOS" "Windows" "FreeBSD" "OpenBSD" "NetBSD" "DragonFly BSD" "Solaris" "OmniOS")
           #~ Append unanticipated families alphabetically
           while IFS= read -r fam; do
             known=false
@@ -120,7 +174,8 @@ jobs:
             if [ -z "$rows" ]; then
               #~ No rows at all: either the run filtered this family out, or it
               #~ was selected and went silent. Only the former is "skipped".
-              if [[ " $RUNNER " == *" $fam "* ]]; then
+              missing_family "$fam"
+              if selected "$fam"; then
                 print_row 'all setups' '-' '-' ':x: no results reported'
               else
                 print_row 'all setups' '-' '-' ':fast_forward: not selected by runner filter'
@@ -150,11 +205,28 @@ jobs:
               if [ "$st" = "success" ]; then
                 icon=':white_check_mark:'
                 shield='👍🏽 passing'
+                fok='true'
               else
                 icon=':x:'
                 shield='👎🏽 failing'
+                fok='false'
               fi
               print_row "$label" "$toolchain" "${pver#v}" "$icon"
+              #~ Same record the feed step serialises: family, setup label, id,
+              #~ arch, arch_short, toolchain, perl, variant, platform, status,
+              #~ ok. A '-' marks a field a setup does not have.
+              #~
+              #~ Every field must be non-empty: tab is IFS whitespace, so a
+              #~ plain read collapses runs of tabs and one blank field shifts
+              #~ every column after it. jq's split("\t") would not care, but the
+              #~ RSS writer reads these rows with bash (same reason the flatten
+              #~ loop above substitutes '-' for empty).
+              dash() { if [ -z "$1" ]; then echo '-'; else echo "$1"; fi; }
+              printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "$family" "$label" "$(dash "$id")" "$(dash "$arch")" \
+                "$(dash "$ashort")" "$(dash "$toolchain")" "$(dash "$pver")" \
+                "$(dash "$variant")" "$(dash "$plat")" "$(dash "$st")" \
+                "$fok" >> "$FEED_ROWS"
               if [ "$first" = false ]; then
                 echo ',' >> "$STATUS_JSON"
               fi
@@ -167,6 +239,178 @@ jobs:
           echo '}' >> "$STATUS_JSON"
 
           cat "$SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate machine-readable feeds
+        if: inputs.feed != ''
+        shell: bash
+        env:
+          TITLE: '${{ inputs.title }}'
+          #~ Interpolation-safe: never expanded into the script text.
+          RUNNER: '${{ inputs.runner }}'
+          TEST_FILES: '${{ inputs.test_files }}'
+          FEED: '${{ inputs.feed }}'
+          RUN_ID: '${{ github.run_id }}'
+          RUN_URL: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          EVENT_NAME: '${{ github.event_name }}'
+          REF_NAME: '${{ github.ref_name }}'
+          SHA: '${{ github.sha }}'
+          COMMIT_TITLE: '${{ github.event.head_commit.message || github.event.pull_request.title || '' }}'
+        run: |
+          mkdir -p status
+          WORK="${RUNNER_TEMP:-/tmp}/results-summary"
+          FEED_ROWS="$WORK/feed.tsv"
+          #~ The summary step writes this; create it only if that step never
+          #~ ran, so a run that reported nothing still produces a feed (truncating
+          #~ an existing file here would silently discard its contents).
+          [ -f "$FEED_ROWS" ] || : > "$FEED_ROWS"
+
+          #~ Formats come from a fixed vocabulary sanitised by the setup job, so
+          #~ a whole-token match is all the validation needed here.
+          want() { [[ " $FEED " == *" $1 "* ]]; }
+
+          #~ Commits titles, branch names and user-defined setup names all end
+          #~ up in XML, so escape rather than trust them. Control characters
+          #~ other than tab/newline/CR are not legal in XML 1.0 at all.
+          xml() {
+            printf '%s' "$1" \
+              | tr -d '\000-\010\013\014\016-\037' \
+              | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+                    -e 's/"/\&quot;/g' -e "s/'/\&apos;/g"
+          }
+
+          generated="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          rfc822="$(date -u -R)"
+
+          if want json; then
+            #~ jq builds the document, so every field is escaped by the same
+            #~ machinery that escapes the rest of the JSON in this repo.
+            jq -n \
+              --arg generated "$generated" \
+              --arg run_id "$RUN_ID" \
+              --arg run_url "$RUN_URL" \
+              --arg event "$EVENT_NAME" \
+              --arg ref "$REF_NAME" \
+              --arg sha "$SHA" \
+              --arg title "$COMMIT_TITLE" \
+              --arg runner "$RUNNER" \
+              --arg test_files "$TEST_FILES" \
+              --rawfile rows "$FEED_ROWS" \
+              'def opt($f): if $f == "-" or $f == "" then null else $f end;
+               {
+                 schema: "workflow-testing/feed/1",
+                 generated: $generated,
+                 run: {
+                   id: $run_id, url: $run_url, event: $event,
+                   ref: $ref, sha: $sha, title: $title
+                 },
+                 selection: {
+                   runner: $runner, test_files: (if $test_files == "" then null else $test_files end)
+                 },
+                 results: [
+                   $rows
+                   | split("\n")[]
+                   | select(length > 0)
+                   | split("\t")
+                   | {
+                       family:  .[0],
+                       setup:   .[1],
+                       id:      opt(.[2]),
+                       arch:    opt(.[3]),
+                       toolchain: opt(.[5]),
+                       perl:    opt(.[6]),
+                       variant: opt(.[7]),
+                       platform: opt(.[8]),
+                       status:  .[9],
+                       ok:      (if .[10] == "true" then true elif .[10] == "false" then false else null end)
+                     }
+                 ]
+               }' > status/feed.json
+          fi
+
+          if want rss; then
+            {
+              printf '<?xml version="1.0" encoding="UTF-8"?>\n'
+              printf '<rss version="2.0">\n'
+              printf '  <channel>\n'
+              printf '    <title>%s</title>\n' "$(xml "$TITLE")"
+              printf '    <link>%s</link>\n' "$(xml "$RUN_URL")"
+              printf '    <description>%s</description>\n' \
+                "$(xml "perl build results for run $RUN_ID ($REF_NAME)")"
+              printf '    <lastBuildDate>%s</lastBuildDate>\n' "$rfc822"
+              printf '    <generator>workflow-testing</generator>\n'
+              #~ Read one row at a time and check its width first: tab is IFS
+              #~ whitespace, so a blank field would collapse and shift every
+              #~ column after it without any error. The writer substitutes '-'
+              #~ for absent fields, so a short row means the contract was
+              #~ broken -- fail loudly instead of emitting a wrong item.
+              while IFS= read -r line; do
+                [ -n "$line" ] || continue
+                #~ Tab is IFS whitespace, so a blank field collapses on read
+                #~ and shifts every column after it. awk sees the real field
+                #~ count and the real (empty) field, so validate both here and
+                #~ refuse to publish an item that would silently be wrong.
+                problem=$(printf '%s\n' "$line" | awk -F'\t' '
+                  NF != 11 { print "has " NF " fields, expected 11"; exit }
+                  { for (i = 1; i <= NF; i++) if ($i == "") { print "field " i " is empty"; exit } }')
+                if [ -n "$problem" ]; then
+                  echo "!! malformed result-feed row ($problem): $line" >&2
+                  exit 1
+                fi
+                IFS=$'\t' read -r family setup id arch arch_short toolchain \
+                                 pver variant platform fstatus fok <<< "$line"
+                title="$family - $setup"
+                #~ A field the setup does not have arrives as '-', and an empty
+                #~ variant arrives as nothing at all, so test for both.
+                has() { [ -n "$1" ] && [ "$1" != '-' ]; }
+                if has "$toolchain"; then
+                  title="$title ($toolchain)"
+                fi
+                if has "$pver"; then
+                  title="$title [$pver]"
+                fi
+                case "$fstatus" in
+                  success)     desc='passing' ;;
+                  skipped)     desc='not selected by the runner filter' ;;
+                  no_results)  desc='no results reported' ;;
+                  *)           desc="$fstatus" ;;
+                esac
+                if has "$arch"; then
+                  desc="$desc on $arch"
+                fi
+                #~ Skipped families have no setup id, so key the item on the
+                #~ family to keep the guid unique within the feed.
+                if has "$id"; then
+                  guid_id="$id"
+                else
+                  guid_id="$family"
+                fi
+                printf '    <item>\n'
+                printf '      <title>%s</title>\n' "$(xml "$title")"
+                printf '      <link>%s</link>\n' "$(xml "$RUN_URL")"
+                printf '      <guid isPermaLink="false">%s</guid>\n' \
+                  "$(xml "run-$RUN_ID-$guid_id")"
+                printf '      <pubDate>%s</pubDate>\n' "$rfc822"
+                printf '      <description>%s</description>\n' "$(xml "$desc")"
+                printf '    </item>\n'
+              done < "$FEED_ROWS"
+              printf '  </channel>\n'
+              printf '</rss>\n'
+            } > status/feed.xml
+          fi
+
+          ls -l status/
+
+      - name: Upload feed files for this run
+        #~ status-files is only kept for a day and the copy on gh-pages only
+        #~ refreshes on main, so the feed also gets a per-run artifact with a
+        #~ longer life for anyone consuming runs directly.
+        if: inputs.feed != ''
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: result-feed-${{ github.run_id }}
+          path: status/feed.*
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload status files
         uses: actions/upload-artifact@v7.0.1
