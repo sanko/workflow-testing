@@ -78,12 +78,15 @@ jobs:
           #~ names (linux, dragonflybsd) while the report groups by display name
           #~ (Linux, DragonFly BSD), so normalise before asking whether a family
           #~ ran. Comparing the display names directly never matches, which would
-          #~ report every silent family as "filtered out".
+          #~ report every silent family as "filtered out". The two spellings
+          #~ differ by punctuation and spacing -- "DragonFly BSD" and
+          #~ "Rocky Linux" are the built-in cases -- so drop everything that is
+          #~ not alphanumeric rather than special-casing names one at a time.
+          #~ A display name that differs by more than that ("GNU/Hurd" against
+          #~ the hurd token) still does not match, so spell those the same.
           selected() {
             local name="${1,,}"
-            if [ "$name" = 'dragonfly bsd' ]; then
-              name=dragonflybsd
-            fi
+            name="$(printf '%s' "$name" | tr -cd '[:alnum:]')"
             [[ " $RUNNER " == *" $name "* ]]
           }
 

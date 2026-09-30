@@ -475,13 +475,14 @@ Beyond the table fields, two inputs matter to a caller:
 | `checkout_submodules` | `''` (the default) fetches no submodules; `recursive` fetches nested ones too. Only meaningful when a setup's `prepare` or `task` needs the source tree. |
 | `continue_on_error` | `run-vm` only. Report failed setups without failing the caller's run, so experimental legs stay visible while the caller reads green. Defaults off. `run-direct` has no equivalent: a failure there is a real failure. |
 
-### Haiku
+### Families this repo does not run by default
 
-`run-vm.yml` has a Haiku VM step and a `haiku` arm in *Collect environment
-info`, so Haiku setups work if you call the workflow with them. `ci.yml`
-deliberately does not list Haiku in `FAMILIES`, and the built-in table has no
-`haiku` key, so no Haiku job appears in a normal run — add both, plus a
-`results-summary.yml` `order` entry, to enable it.
+Several families have a VM step and a `case` arm in *Collect environment info*,
+so a caller naming them gets a real run: Haiku, MidnightBSD and the Linux and
+alternative-UNIX guests listed under [VM families](#vm-families). None of them is
+in the built-in setup table or has a job in `ci.yml`, so none appears in this
+repo's own runs. Adding the three pieces from *Adding an OS family* — a table
+key, a job and an `order` entry — is what turns one on.
 
 <a name="entry-fields"></a>
 ### Entry fields
@@ -593,12 +594,10 @@ A family spans four places. For a new BSD, say:
    typo in the key name silently runs nothing — the key must match the gate in
    step 2 exactly.
 
-2. **`generate-matrix.yml`** — add the name to `FAMILIES`, and **`ci.yml`** —
-   add a job that calls the reusable workflow, gated like the others:
-
-   ```bash
-   FAMILIES=(freebsd openbsd netbsd dragonflybsd solaris omnios linux macos windows midnightbsd)
-   ```
+2. **`ci.yml`** — add a job that calls the reusable workflow, gated like the
+   others. Nothing in `generate-matrix.yml` has to change: the family list is
+   derived from the table's own keys, so the entry from step 1 is already what
+   makes the family selectable.
 
    ```yaml
      midnightbsd:
@@ -614,11 +613,12 @@ A family spans four places. For a new BSD, say:
          test_files: "${{ needs.setup.outputs.test_files }}"
    ```
 
-   The order in `FAMILIES` only affects the order of the emitted `runner` list;
-   the order families appear in the report comes from `results-summary.yml` in
-   step 4.
-
    And add it to the `results` job's `needs:` list.
+
+   If you would rather see the family ordered among the built-ins in the emitted
+   `runner` list than appended after them, add the key to `KNOWN` in
+   `generate-matrix.yml`. That is optional and affects nothing else. The order
+   families appear in the report comes from `results-summary.yml` in step 4.
 
 3. **`run-vm.yml`** — add a VM step for it, gated on the `os` value, and a `case`
    arm in the *Collect environment info* step so the report names it correctly:
@@ -629,7 +629,8 @@ A family spans four places. For a new BSD, say:
 
    The `os` value in the table entry is what selects the step
    (`if: matrix.os == 'midnightbsd'`); an entry with an `os` no step handles
-   silently builds nothing.
+   silently builds nothing. The arm quoted above is a real one, MidnightBSD
+   being wired up; copy the shape for one that is not.
 
 4. **`results-summary.yml`** — add the display name to `order` so it is not
    appended alphabetically at the end:
@@ -637,6 +638,13 @@ A family spans four places. For a new BSD, say:
    ```bash
    order=("Linux" "macOS" "Windows" "FreeBSD" "OpenBSD" "NetBSD" "DragonFly BSD" "Solaris" "OmniOS" "MidnightBSD")
    ```
+
+   Two things to know about this list. It also decides who is reported as *not
+   selected*, so add the name only once the `ci.yml` job from step 2 exists,
+   otherwise every full run grows a misleading row. And the name has to match the
+   table key apart from punctuation and spacing, because that is all `selected()`
+   normalises: "DragonFly BSD" and "Rocky Linux" are fine, "GNU/Hurd" for the
+   `hurd` key is not.
 
 For a hosted runner, the equivalent steps are a `run-direct` job in `ci.yml` and
 an `os` arm in *Collect environment info* in `run-direct.yml`.
@@ -860,7 +868,7 @@ and waiting for a caller to ask for them.
 | `debian` | Debian | `v1.0.1` | x86_64, aarch64, riscv64, ppc64le |
 | `ghostbsd` | GhostBSD | `v1.0.4` | x86_64 |
 | `hardenedbsd` | HardenedBSD | `v1.0.1` | x86_64 |
-| `hurd` | GNU/Hurd | `v1.0.2` | x86_64, i386 |
+| `hurd` | Hurd | `v1.0.2` | x86_64, i386 |
 | `nextbsd` | NextBSD | `v1.0.2` | x86_64, aarch64 |
 | `openeuler` | openEuler | `v1.0.3` | x86_64, aarch64, riscv64, loongarch64 |
 | `openindiana` | OpenIndiana | `v1.1.7` | x86_64 |

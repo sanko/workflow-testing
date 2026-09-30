@@ -241,7 +241,7 @@ jobs:
             debian)        family='Debian' ;;
             ghostbsd)      family='GhostBSD' ;;
             hardenedbsd)   family='HardenedBSD' ;;
-            hurd)          family='GNU/Hurd' ;;
+            hurd)           family='Hurd' ;;
             nextbsd)       family='NextBSD' ;;
             openeuler)     family='openEuler' ;;
             openindiana)   family='OpenIndiana' ;;
