@@ -6,8 +6,10 @@ a declarative matrix, records the outcome of each combination as a small JSON
 artifact, and renders a per-OS results table in the run summary and on a status
 page.
 
-The matrix itself lives in [`ci.yml`](.github/workflows/ci.yml). Three reusable
-workflows do the work:
+The setups are declared once, as a default input on
+[`generate-matrix.yml`](.github/workflows/generate-matrix.yml).
+[`ci.yml`](.github/workflows/ci.yml) calls it, then dispatches to three
+reusable workflows:
 
 | Workflow | Purpose |
 |:--|:--|
@@ -26,12 +28,13 @@ workflows do the work:
   - [Manual runs](#manual-runs)
   - [How a selection is applied](#how-a-selection-is-applied)
   - [Edge cases](#edge-cases)
-- [The matrix](#the-matrix)
+- [The setups table](#the-setups-table)
   - [Entry fields](#entry-fields)
   - [Recipes](#recipes)
   - [Adding an OS family](#adding-an-os-family)
 - [Per-job mechanics](#per-job-mechanics)
 - [Results and the status page](#results-and-the-status-page)
+  - [Machine-readable feeds](#machine-readable-feeds)
 - [Reference tables](#reference-tables)
 - [Notes and caveats](#notes-and-caveats)
 
@@ -43,41 +46,40 @@ workflows do the work:
    push / pull_request / schedule / workflow_dispatch
                     |
                     v
-        +---------------------------+
-        |  setup  (in ci.yml)       |
-        |                           |
-        |  runner    " freebsd … "  |  which families should run
-        |  select    {"linux": …}   |  which archs, per family
-        |  test_files                |  the test pattern
-        +---------------------------+
-             |                  |
-        family gate          family gate
-     if: contains(...)     if: contains(...)
-             |                  |
-   freebsd ──┘                  └── linux  ── macos ── windows
-   openbsd                        (run-vm)    (run-direct)
-   netbsd  ...                            |
-   dragonflybsd                           v
-   solaris                        +----------------+
-   omnios                         |  select  job   |  prune matrix entries
-   (run-vm)                       |  jq filter     |  whose arch was not
-                                  +----------------+  selected
-                                          |
-                                          v
-                                 run  (one job per setup)
-                                          |
-                                          v
+        +---------------------------------------+
+        |  setup  (generate-matrix.yml)        |
+        |                                       |
+        |  parse the commit tags                |  runner / test / feed
+        |  prune the built-in setup table      |  drop setups that were not
+        |                                       |  selected (jq)
+        |                                       |
+        |  runner    " freebsd … "              |  which families were asked for
+        |  ready     " freebsd linux "          |  which of those have work left
+        |  matrices  {"linux": [ … ]}          |  the surviving setups per family
+        +---------------------------------------+
+                    |                    |
+               family gate          family gate
+            if: contains(…)       if: contains(…)
+                    |                    |
+      freebsd ───────┘                    └──── linux ── macos ── windows
+      openbsd                              (run-vm)   (run-direct)
+      netbsd  …                                     │
+      dragonflybsd                                  v
+      solaris                            run  (one job per setup,
+      omnios                              matrix = the pruned entries)
+      (run-vm)                                     │
+                                                  v
                             result-artifact-<setup>.json
                             result-artifact-<setup>.result
-                                          |
-                                          v
-                              results ──> results-summary
-                                          │
-                                          v
-                            status.md + status.json
-                                          │
-                                          v
-                        publish-status (main only) ──> gh-pages /status
+                                                  │
+                                                  v
+                                results ──> results-summary
+                                                  │
+                                                  v
+                                status.md + status.json
+                                                  │
+                                                  v
+                          publish-status (main only) ──> gh-pages /status
 ```
 
 Triggers: `pull_request`, `push`, a weekly `schedule` (Sunday 05:42 UTC) and
@@ -165,16 +167,23 @@ Dispatching with `runner=openbsd#riscv,windows` and
 
 ### How a selection is applied
 
-Selection happens in two stages, so a filtered run never starts work it does not
-need:
+All of it happens in the one `setup` job inside
+[`generate-matrix.yml`](.github/workflows/generate-matrix.yml), so a filtered run
+never starts work it does not need. There are three outputs, and the distinction
+between the first two is what makes the report honest:
 
-1. **Family gate** — `setup` emits a *space-padded* list of family names and
-   every family job tests it with `contains()`:
+| Output | Example | Meaning |
+|:--|:--|:--|
+| `runner` | `" linux macos "` | The families the tag *asked for*. Reported as *not selected*. |
+| `ready` | `" linux "` | Those families that still have at least one setup to run. |
+| `matrices` | `{"linux":[…],"macos":[]}` | The surviving setups, per family. |
+
+1. **Family gate** — every family job tests `ready` with `contains()`:
 
    ```yaml
    freebsd:
      needs: setup
-     if: "${{ contains(needs.setup.outputs.runner, ' freebsd ') }}"
+     if: "${{ contains(needs.setup.outputs.ready, ' freebsd ') }}"
    ```
 
    The padding is what makes this a whole-token test: without it, `contains()`
@@ -183,27 +192,26 @@ need:
    not special-cased either — `all` expands to the full list, so every gate
    below is written the same way.
 
-2. **Matrix prune** — `setup` also emits a per-family arch filter
-   (`{"freebsd":"", "linux":"aarch64", …}`), which the reusable workflow hands to
-   a small `select` job. That job filters the JSON matrix with `jq` and the
-   matrix job consumes the result:
+2. **Matrix prune** — the same step reduces the built-in table to the entries
+   that survive the selection, and emits them per family:
 
    ```yaml
-   select:
-     outputs:
-       include: '${{ steps.select.outputs.include }}'
-       count:    '${{ steps.select.outputs.count }}'
-   run:
-     needs: select
-     if: needs.select.outputs.count != '0'
-     strategy:
-       matrix:
-         include: ${{ fromJSON(needs.select.outputs.include) }}
+   linux:
+     needs: setup
+     if: "${{ contains(needs.setup.outputs.ready, ' linux ') }}"
+     uses: ./.github/workflows/run-direct.yml
+     with:
+       matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).linux) }}
    ```
 
-   When a selection matches no setup at all (`[runner:dragonflybsd#arm]`, where
-   DragonFly BSD only builds `x86_64`), the matrix job is skipped rather than
-   failing.
+   The reusable workflow's matrix is `include: ${{ fromJSON(inputs.matrix) }}`,
+   so it starts exactly the jobs `setup` left behind. Nothing is filtered
+   downstream, and a family with no surviving setups is dropped from `ready`, so
+   its job is never even scheduled.
+
+Because pruning happens before dispatch, a selection that matches no setup at all
+(`[runner:dragonflybsd#arm]`, where DragonFly BSD only builds `x86_64`) simply
+does not start that family, and the report shows `:x: no results reported`.
 
 ### Edge cases
 
@@ -214,34 +222,125 @@ need:
 | `[runner:]` | Everything runs. |
 | `[runner:plan9]` | Warning emitted, **everything runs** — an unknown family is treated as a typo, not as "run nothing". |
 | `[runner:linux#arm,linux#arm]` | One `aarch64` filter; the family appears once. |
-| `[runner:linux#sparc]` | Warning emitted, the arch filter is **dropped**, and every Linux setup runs. |
-| `[runner:dragonflybsd#arm]` | The family is selected, but no setup in its matrix is `aarch64`, so the matrix job is skipped and the report shows `:x: no results reported`. |
+| `[runner:linux#sparc]` | Two warnings, and **nothing runs**. An unknown arch becomes a sentinel that matches no setup, so a typo fails closed instead of quietly running every Linux setup. |
+| `[runner:dragonflybsd#arm]` | The family is selected, but no setup in its matrix is `aarch64`, so the job is never started and the report shows `:x: no results reported`. |
 
 ---
 
-## The matrix
+## The setups table
 
-Each family job passes a JSON array of setups to a reusable workflow. Every
-entry describes one job.
+Every setup is declared once, as the default value of the `table` input on
+[`generate-matrix.yml`](.github/workflows/generate-matrix.yml), keyed by family.
+There is no per-family matrix anywhere else: `setup` prunes this table and hands
+each family its own slice.
+
+```yaml
+      table:
+        default: >
+          {"freebsd":[{"platform_name":"freebsd","os":"freebsd","arch":"x86_64",…}],
+          "linux":[…],…}
+```
+
+The default is a JSON object in a YAML block scalar, one family per line, so a
+change to one family shows up as a one-line diff. It is a *default*, not a
+constant: any caller can override it wholesale via the `table` input.
+
+A family job receives its slice and passes it straight through:
 
 ```yaml
   freebsd:
     name: FreeBSD
     needs: setup
-    if: "${{ contains(needs.setup.outputs.runner, ' freebsd ') }}"
+    if: "${{ contains(needs.setup.outputs.ready, ' freebsd ') }}"
     uses: ./.github/workflows/run-vm.yml
+    secrets: inherit
+    with:
+      os_version: '15.0'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).freebsd) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+```
+
+The run workflows are therefore family-agnostic: they take a JSON array of
+setups and start one job per entry. They do not know what a `[runner:…]` tag
+means, and a family that is absent from the table is absent from the run.
+
+### Using the reusable workflows from another repository
+
+There are two things you can borrow, and the difference matters.
+
+**`generate-matrix.yml` — the whole selection layer.** Call it and you get
+`[runner:linux#arm]` filtering, with **nothing to copy and no file to add to your
+repo**. The table travels with the workflow, so the `uses:` ref pins the logic
+and the data together:
+
+```yaml
+  # in another repository's workflow
+  jobs:
+    setup:
+      uses: your-org/workflow-testing/.github/workflows/generate-matrix.yml@v1
+      with:
+        runner: 'linux#arm,windows'   # or leave empty to read the commit tag
+
+    linux:
+      needs: setup
+      if: "${{ contains(needs.setup.outputs.ready, ' linux ') }}"
+      uses: ./.github/workflows/run-direct.yml
+      secrets: inherit
+      with:
+        matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).linux) }}
+```
+
+| Input | Default | Meaning |
+|:--|:--|:--|
+| `runner` | `''` | Overrides the `[runner:…]` tag. Empty means "use the tag". |
+| `test_files` | `''` | Overrides the `[test:…]` tag. |
+| `feed` | `''` | Overrides the `[feed:…]` tag. |
+| `table` | the built-in table | Your own setups, as a JSON object. Pass it to run a completely different portfolio. |
+
+Outputs are `runner`, `ready`, `matrices`, `test_files` and `feed`, as described
+in [How a selection is applied](#how-a-selection-is-applied).
+
+**`run-vm.yml` / `run-direct.yml` — the executors.** These are
+`workflow_call`-only and deliberately dumb: they take a `matrix` of setups and
+start one job per entry, understanding no tags and reading no table. Use these
+when you just want a VM or a hosted runner and already know what to run:
+
+```yaml
+  perl-smoke:
+    uses: your-org/workflow-testing/.github/workflows/run-vm.yml@main
     secrets: inherit
     with:
       os_version: '15.0'
       task: 'perl -V'
       matrix: >
         [
-          {"platform_name":"freebsd","os":"freebsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5 lang/gcc"},
-          {"platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"clang","prepare":"pkg install -y perl5 llvm"}
+          {"platform_name":"freebsd","os":"freebsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5"}
         ]
-      select: "${{ fromJSON(needs.setup.outputs.select).freebsd }}"
-      test_files: "${{ needs.setup.outputs.test_files }}"
 ```
+
+Whichever you pick, nothing in this repo has to be added to yours.
+This is a real trade-off, not an oversight. Selection used to happen in a `select`
+job *inside* the reusable workflow, so a caller only had to pass `select:` and
+pruning came for free — at the cost of one throwaway runner per family and nine
+`Family / Select setups` rows in every run's job list. It now happens once, in
+`setup`, which makes this repo's run list clean and cheap. External callers who
+want the tag behaviour pay for that in copy-paste.
+
+Beyond the table fields, two inputs matter to a caller:
+
+| Input | Meaning |
+|:--|:--|
+| `checkout_submodules` | `''` (the default) fetches no submodules; `recursive` fetches nested ones too. Only meaningful when a setup's `prepare` or `task` needs the source tree. |
+| `continue_on_error` | `run-vm` only. Report failed setups without failing the caller's run, so experimental legs stay visible while the caller reads green. Defaults off. `run-direct` has no equivalent: a failure there is a real failure. |
+
+### Haiku
+
+`run-vm.yml` has a Haiku VM step and a `haiku` arm in *Collect environment
+info`, so Haiku setups work if you call the workflow with them. `ci.yml`
+deliberately does not list Haiku in `FAMILIES`, and the built-in table has no
+`haiku` key, so no Haiku job appears in a normal run — add both, plus a
+`results-summary.yml` `order` entry, to enable it.
 
 <a name="entry-fields"></a>
 ### Entry fields
@@ -266,14 +365,18 @@ Reusable-workflow inputs:
 | `os_version` | yes | – | Release passed to the `vmactions` action, e.g. `15.0`, `r151056`. |
 | `host_os` | optional | – | Runner label hosting the VM. Defaults to `ubuntu-latest`. |
 | `task` | optional | optional | Command to run. Defaults to `perl build.pl --compiler=<toolchain> coverage`. |
-| `select` | optional | optional | Arch filter from the `[runner:...]` tag. |
 | `test_files` | optional | optional | Test pattern from the `[test:...]` tag. |
+
+`matrix` is always the *already-pruned* slice of **this repo's** setup table when
+called from `ci.yml`; a direct caller supplies whatever it likes. See
+[How a selection is applied](#how-a-selection-is-applied) and
+[Using the reusable workflows from another repository](#using-the-reusable-workflows-from-another-repository).
 
 <a name="recipes"></a>
 ### Recipes
 
 **Build NetBSD on x86_64 with clang** — the family already exists, so this is a
-one-line addition to the `netbsd` matrix:
+one-line addition to the `netbsd` list in the `table` input:
 
 ```json
 {"platform_name":"netbsd","os":"netbsd","arch":"x86_64","toolchain":"clang","prepare":"/usr/sbin/pkg_add perl"}
@@ -312,7 +415,7 @@ it. When `perl_version` is set, the default task's environment is prefixed with
 (it may differ from the requested one).
 
 **Run a one-off command instead of a build** — `task` applies to every setup in
-the matrix:
+the family:
 
 ```yaml
       task: 'perl build.pl --compiler=gcc -Dusethreads coverage'
@@ -331,35 +434,45 @@ All the BSDs, nothing else                           [runner:freebsd,openbsd,net
 
 A family spans four places. For a new BSD, say:
 
-1. **`ci.yml` `setup`** — add the name to `FAMILIES`:
+1. **`generate-matrix.yml`** — add a list under the family name in the `table`
+   default:
+
+   ```json
+   "midnightbsd":[
+     {"platform_name":"midnightbsd","os":"midnightbsd","arch":"x86_64","toolchain":"gcc","prepare":"sudo mport install perl gcc"}
+   ]
+   ```
+
+   This is the family’s whole definition. `setup` prunes from this key, so a
+   typo in the key name silently runs nothing — the key must match the gate in
+   step 2 exactly. Keep it on one line, as the surrounding families are: the
+   whole table is a folded YAML scalar, and a newline inside a family would be
+   folded into a space and break the JSON.
+
+2. **`generate-matrix.yml`** — add the name to `FAMILIES`, and **`ci.yml`** —
+   add a job that calls the reusable workflow, gated like the others:
 
    ```bash
    FAMILIES=(freebsd openbsd netbsd dragonflybsd solaris omnios linux macos windows midnightbsd)
    ```
 
-   The order here only affects the order of the emitted `runner` list; the order
-   families appear in the report comes from `results-summary.yml` in step 4.
-
-2. **`ci.yml`** — add a job that calls the reusable workflow, gated like the
-   others:
-
    ```yaml
      midnightbsd:
        name: MidnightBSD
        needs: setup
-       if: "${{ contains(needs.setup.outputs.runner, ' midnightbsd ') }}"
+       if: "${{ contains(needs.setup.outputs.ready, ' midnightbsd ') }}"
        uses: ./.github/workflows/run-vm.yml
        secrets: inherit
        with:
          os_version: '4.0.4'
          task: 'perl -V'
-         matrix: >
-           [
-             {"platform_name":"midnightbsd","os":"midnightbsd","arch":"x86_64","toolchain":"gcc","prepare":"sudo mport install perl gcc"}
-           ]
-         select: "${{ fromJSON(needs.setup.outputs.select).midnightbsd }}"
+         matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).midnightbsd) }}
          test_files: "${{ needs.setup.outputs.test_files }}"
    ```
+
+   The order in `FAMILIES` only affects the order of the emitted `runner` list;
+   the order families appear in the report comes from `results-summary.yml` in
+   step 4.
 
    And add it to the `results` job's `needs:` list.
 
@@ -370,7 +483,7 @@ A family spans four places. For a new BSD, say:
      midnightbsd)  family='MidnightBSD' ;;
    ```
 
-   The `os` value in the matrix entry is what selects the step
+   The `os` value in the table entry is what selects the step
    (`if: matrix.os == 'midnightbsd'`); an entry with an `os` no step handles
    silently builds nothing.
 
@@ -526,6 +639,56 @@ configuration with a new key.
 artifact, and `publish-status` deploys it to the `gh-pages` branch under
 `/status` — **only** on pushes to `main`.
 
+<a name="feeds"></a>
+### Machine-readable feeds
+
+The status page is a page for humans. To consume the same results from a script,
+a bot, or an RSS reader, tag the commit:
+
+```
+Fix the ARM VM boot hang [runner:linux#arm] [feed:json,rss]
+```
+
+| Tag | Result |
+|:--|:--|
+| `[feed:json]` | `feed.json` only. |
+| `[feed:rss]` | `feed.xml` only. |
+| `[feed:json,rss]` | Both. |
+| *(absent)* | Neither. Feeds are opt-in, so the default run uploads no extra artifact. |
+
+`workflow_dispatch` exposes the same choice as a `feed` input, and it overrides
+the commit tag, as `runner` and `test_files` do. Unknown format names are
+warned about and dropped, so a typo cannot invent a filename.
+
+`feed.json` is one object per run:
+
+```json
+{
+  "schema": "workflow-testing/feed/1",
+  "generated": "2026-09-29T05:42:11Z",
+  "run": { "id": "1234", "url": "https://github.com/…/actions/runs/1234", "event": "push", "ref": "main", "sha": "…", "title": "…" },
+  "selection": { "runner": " linux ", "test_files": null },
+  "results": [
+    { "family": "Linux", "setup": "ARM", "id": "1a2b3c4d", "arch": "aarch64",
+      "toolchain": "gcc", "perl": null, "variant": null, "platform": "linux",
+      "status": "👍🏽 passing", "ok": true }
+  ]
+}
+```
+
+Fields that do not apply are `null` rather than `"-"`, so a consumer can tell
+"not applicable" from "empty string". `ok` is a tri-state: `true`/`false` where
+a setup reported, `null` where it did not — either because the family was
+filtered out (`status: "skipped"`) or because it was selected but silent
+(`status: "no_results"`). The string `status` is always present and is the field
+to branch on if the tri-state is inconvenient.
+
+`feed.xml` is an RSS 2.0 channel over the same records, with a stable `guid` per
+setup fingerprint. Both files are written by `results-summary` and uploaded as
+the `result-feed-<run id>` artifact with a 30-day retention, alongside — not
+instead of — the `status-files` artifact. `status.json` itself is unchanged by
+any of this.
+
 ---
 
 ## Reference tables
@@ -558,5 +721,8 @@ matter of pointing it at whichever label GitHub offers.
 ## Notes and caveats
 
 - **A filtered run publishes a partial status page.** `status.json` only contains families that produced results, and `publish-status` overwrites the previous file (with `keep_files: true`, which preserves the site's *other* files, not the previous `status.json`). This is pre-existing behaviour, but it is much more visible now that filtered runs are easy to trigger — a filtered run on `main` will make unselected configurations disappear from the page.
-- **The `select` job costs a runner.** Each family now starts one short job before its matrix job, which is what allows unselected architectures to be skipped rather than run and reported as failures.
+- **Unselected architectures are skipped, not failed.** The `setup` job prunes
+   built-in table before dispatch, so a `[runner:linux#arm]` commit never
+   starts the x86_64 Linux jobs. This costs one extra runner — `setup` itself,
+   which now prunes the table instead of doing nothing but string matching.
 - **Untrusted input is filtered twice.** Runner names are matched against a fixed list with `grep -qxF` (fixed-string, never a regex), and the test pattern is reduced to glob characters. Family and arch names are also canonicalised, so nothing from a commit message can reach a shell unfiltered.

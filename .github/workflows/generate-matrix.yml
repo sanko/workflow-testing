@@ -1,0 +1,302 @@
+name: Generate Testing Matrix
+permissions:
+  contents: read
+
+#~ Reusable, so a downstream repo can call this instead of copying ci.yml's
+#~ setup job. The setup table lives here as a workflow input default, so
+#~ nothing needs to be cloned into the caller's repo.
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: 'Runners to execute, comma-separated (e.g. "freebsd,linux" or "linux#arm,openbsd#riscv"). Overrides the [runner:...] tag.'
+        required: false
+        type: string
+        default: ''
+      test_files:
+        description: 'Test file pattern to run (e.g. t/3000_jenny/3500_isolate/*.t). Overrides the [test:...] tag.'
+        required: false
+        type: string
+        default: ''
+      feed:
+        description: 'Machine-readable result feeds: "json", "rss", or "json,rss". Overrides the [feed:...] tag.'
+        required: false
+        type: string
+        default: ''
+      table:
+        description: >
+          JSON object of family -> array of setups to prune. Defaults to the
+          table embedded in this workflow, so a caller that just wants the
+          standard perl5 portfolios passes nothing at all.
+        required: false
+        type: string
+        default: >
+                  {"freebsd":[{"platform_name":"freebsd","os":"freebsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5 lang/gcc"},{"platform_name":"freebsd","os":"freebsd","arch":"x86_64","toolchain":"clang","prepare":"pkg install -y perl5 llvm"},{"platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"gcc","prepare":"pkg install -y perl5 lang/gcc"},{"platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"clang","prepare":"pkg install -y perl5 llvm"}],
+                  "openbsd":[{"platform_name":"openbsd","os":"openbsd","arch":"x86_64","toolchain":"egcc","prepare":"pkg_add gcc-11.2.0p19 g++-11.2.0p19"},{"platform_name":"openbsd","os":"openbsd","arch":"x86_64","toolchain":"clang"},{"platform_name":"openbsd","os":"openbsd","arch":"aarch64","toolchain":"egcc","prepare":"pkg_add gcc-11.2.0p19 g++-11.2.0p19"},{"platform_name":"openbsd","os":"openbsd","arch":"aarch64","toolchain":"clang"},{"platform_name":"openbsd","os":"openbsd","arch":"riscv64","toolchain":"egcc","prepare":"pkg_add gcc-11.2.0p19 g++-11.2.0p19"},{"platform_name":"openbsd","os":"openbsd","arch":"riscv64","toolchain":"clang"}],
+                  "netbsd":[{"platform_name":"netbsd","os":"netbsd","arch":"x86_64","toolchain":"gcc","prepare":"/usr/sbin/pkg_add perl"},{"platform_name":"netbsd","os":"netbsd","arch":"aarch64","toolchain":"gcc","prepare":"/usr/sbin/pkg_add perl"}],
+                  "dragonflybsd":[{"platform_name":"dragonflybsd","os":"dragonflybsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5 gcc"}],
+                  "solaris":[{"platform_name":"solaris","os":"solaris","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -v --accept perl-538 gcc"}],
+                  "omnios":[{"platform_name":"omnios","os":"omnios","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -v --accept perl build-essential"}],
+                  "linux":[{"platform_name":"ubuntu","os":"ubuntu-latest","arch":"x86_64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},{"platform_name":"ubuntu","os":"ubuntu-latest","arch":"x86_64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y clang perl"},{"platform_name":"ubuntu","os":"ubuntu-24.04-arm","arch":"aarch64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},{"platform_name":"ubuntu","os":"ubuntu-24.04-arm","arch":"aarch64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y clang perl"},{"platform_name":"ubuntu","os":"ubuntu-24.04-riscv","arch":"riscv64","toolchain":"gcc","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl"},{"platform_name":"ubuntu","os":"ubuntu-24.04-riscv","arch":"riscv64","toolchain":"clang","prepare":"sudo apt-get update && sudo apt-get install -y gcc perl libclang-rt-dev"}],
+                  "macos":[{"platform_name":"macos","os":"macos-15","arch":"aarch64","toolchain":"gcc"},{"platform_name":"macos","os":"macos-15","arch":"aarch64","toolchain":"clang"},{"platform_name":"macos","os":"macos-15-intel","arch":"x86_64","toolchain":"gcc"},{"platform_name":"macos","os":"macos-15-intel","arch":"x86_64","toolchain":"clang"}],
+                  "windows":[{"platform_name":"windows","os":"windows-latest","arch":"x86_64","toolchain":"gcc","prepare":"choco install mingw strawberryperl"},{"platform_name":"windows","os":"windows-latest","arch":"x86_64","toolchain":"clang","prepare":"choco install llvm strawberryperl"},{"platform_name":"windows","os":"windows-latest","arch":"x86_64","toolchain":"msvc","prepare":"choco install opencppcoverage strawberryperl; bash"},{"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"gcc"},{"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"clang","prepare":"choco install llvm strawberryperl"},{"platform_name":"windows","os":"windows-11-arm","arch":"aarch64","toolchain":"msvc","prepare":"choco install opencppcoverage strawberryperl; bash"}]}
+    outputs:
+      runner:
+        description: 'Space-padded list of the families the tag asked for.'
+        value: '${{ jobs.setup.outputs.runner }}'
+      ready:
+        description: 'Space-padded subset of runner that still has work.'
+        value: '${{ jobs.setup.outputs.ready }}'
+      matrices:
+        description: 'Pruned matrix, keyed by family.'
+        value: '${{ jobs.setup.outputs.matrices }}'
+      test_files:
+        description: 'The test pattern.'
+        value: '${{ jobs.setup.outputs.test_files }}'
+      feed:
+        description: 'The requested feed formats.'
+        value: '${{ jobs.setup.outputs.feed }}'
+
+jobs:
+  #~ The only place selection happens. Tag parsing, arch canonicalisation and
+  #~ the pruning pass all live in this one step, so the caller never has to
+  #~ re-derive what to run and no downstream job filters anything.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: '${{ steps.parse_tags.outputs.runner }}'
+      ready: '${{ steps.parse_tags.outputs.ready }}'
+      matrices: '${{ steps.parse_tags.outputs.matrices }}'
+      test_files: '${{ steps.parse_tags.outputs.test_files }}'
+      feed: '${{ steps.parse_tags.outputs.feed }}'
+    steps:
+      - name: Parse tags and prune the setup table
+        id: parse_tags
+        shell: bash
+        env:
+          #~ Double-quoted: an empty-string literal inside would terminate a
+          #~ single-quoted YAML string early and leave an unterminated
+          #~ expression, which fails workflow validation with no jobs at all.
+          COMMIT_MSG: "${{ github.event.head_commit.message || github.event.pull_request.title || '' }}"
+          DISPATCH_RUNNER: '${{ inputs.runner }}'
+          DISPATCH_TEST: '${{ inputs.test_files }}'
+          DISPATCH_FEED: '${{ inputs.feed }}'
+          TABLE_IN: '${{ inputs.table }}'
+        run: |
+          #~ Job families, in report order. A tag selects whole families here;
+          #~ the arch part of a tag narrows the setups within them.
+          FAMILIES=(freebsd openbsd netbsd dragonflybsd solaris omnios linux macos windows)
+
+          #~ Canonicalise the arch spelling accepted after `#`. Must agree with
+          #~ the `arch` values in the table below, which is why the test suite
+          #~ asserts every table arch survives a round trip through this.
+          canon_arch() {
+            case "${1,,}" in
+              x86-64|x86_64|x64|intel|amd64) echo x86_64 ;;
+              arm|arm64|aarch64|a64)         echo aarch64 ;;
+              riscv|riscv64|r64)             echo riscv64 ;;
+            esac
+          }
+
+          RUNNER=''
+          SELECT=''
+
+          #~ Expand one runner tag into the set of families to run plus a
+          #~ per-family arch filter. RUNNER is space-padded (" freebsd linux ")
+          #~ so job gates can match whole tokens with contains() instead of
+          #~ risking a substring match.
+          expand() {
+            local input="$1" entry fam arch result='' json='' matched=''
+            local -A archs=() picked=()
+            IFS=',' read -ra parts <<< "$input"
+            for entry in "${parts[@]}"; do
+              #~ Trim surrounding whitespace, then case-fold the entry.
+              entry="${entry#"${entry%%[! ]*}"}"
+              entry="${entry%"${entry##*[! ]}"}"
+              entry="${entry,,}"
+              if [ -z "$entry" ]; then
+                continue
+              fi
+              if [ "$entry" = all ]; then
+                for fam in "${FAMILIES[@]}"; do
+                  result="$result $fam "
+                done
+                matched=yes
+                break
+              fi
+              fam="${entry%%#*}"
+              arch=''
+              if [ "$entry" != "$fam" ]; then
+                arch="${entry#*#}"
+              fi
+              #~ Fixed-string match: the tag is untrusted text, never a regex.
+              if ! printf '%s\n' "${FAMILIES[@]}" | grep -qxF -- "$fam"; then
+                echo "::warning::ignoring unknown runner '$fam' in [runner:$entry]"
+                continue
+              fi
+              matched=yes
+              #~ A tag may name a family twice (e.g. linux#arm,linux#riscv);
+              #~ list it once and merge the arch filters instead.
+              if [ -z "${picked[$fam]:-}" ]; then
+                result="$result $fam "
+                picked["$fam"]=1
+              fi
+              if [ -z "$arch" ]; then
+                continue
+              fi
+              arch="$(canon_arch "$arch")"
+              if [ -z "$arch" ]; then
+                #~ An unknown arch becomes a sentinel rather than being
+                #~ dropped. Dropping is no longer safe: pruning happens below,
+                #~ and an arch list that ends up empty is indistinguishable
+                #~ from "no filter given", which would run the *whole* family.
+                #~ A typo would silently run everything instead of nothing.
+                #~ The sentinel matches no setup, so the family ends up
+                #~ selected-but-empty and the warning above stands.
+                echo "::warning::ignoring unknown arch for '$fam' in [runner:$entry]"
+                arch='__unknown__'
+              fi
+              if [[ ",${archs[$fam]:-}," == *",$arch,"* ]]; then
+                #~ An earlier entry in this tag already picked that arch.
+                :
+              else
+                archs["$fam"]="${archs[$fam]:-}${archs[$fam]:+,}$arch"
+              fi
+            done
+            #~ A tag that names nothing we know about (a typo, a renamed
+            #~ family) must not silently produce an empty run.
+            if [ -z "$matched" ]; then
+              echo "::warning::[runner:$input] selected no known runner, running everything"
+              result=''
+              for fam in "${FAMILIES[@]}"; do
+                result="$result $fam "
+              done
+            fi
+            RUNNER="$result"
+            #~ Every family gets a key, so `.[$fam]` below is always a string
+            #~ (empty when no arch filter was given) rather than null.
+            for fam in "${FAMILIES[@]}"; do
+              if [ -z "$json" ]; then
+                json="\"$fam\":\"${archs[$fam]:-}\""
+              else
+                json="$json,\"$fam\":\"${archs[$fam]:-}\""
+              fi
+            done
+            SELECT="{${json}}"
+          }
+
+          #~ Dispatch inputs win over the commit tag; an untagged commit runs
+          #~ everything, so the default behaviour is an unfiltered run.
+          tag="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[runner:\K[^\]]*' || true)"
+          test="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[test:\K[^\]]*' || true)"
+          feed="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[feed:\K[^\]]*' || true)"
+          if [ -n "$DISPATCH_RUNNER" ]; then
+            tag="$DISPATCH_RUNNER"
+          elif [ -z "$tag" ]; then
+            tag='all'
+          fi
+          [ -n "$DISPATCH_TEST" ] && test="$DISPATCH_TEST"
+          [ -n "$DISPATCH_FEED" ] && feed="$DISPATCH_FEED"
+          expand "$tag"
+
+          #~ The pattern is interpolated into shell run blocks downstream, so
+          #~ keep it to characters that mean something in a file glob and drop
+          #~ anything else rather than executing it.
+          test="$(printf '%s' "$test" | tr -cd 'A-Za-z0-9_.,-/*')"
+
+          #~ Feed formats are matched against a fixed vocabulary, so the tag
+          #~ can never reach a filename. The formats are dropped again if the
+          #~ tag is absent, which is what keeps the feed steps off.
+          FEED=''
+          if [ -n "$feed" ]; then
+            IFS=',' read -ra formats <<< "$feed"
+            for entry in "${formats[@]}"; do
+              entry="${entry#"${entry%%[! ]*}"}"
+              entry="${entry%"${entry##*[! ]}"}"
+              entry="${entry,,}"
+              case "$entry" in
+                json|rss) FEED="$FEED $entry " ;;
+                *) echo "::warning::ignoring unknown feed format '$entry' in [feed:$feed]" ;;
+              esac
+            done
+          fi
+
+          #~ Prune the table. SELECT is already a JSON object of family ->
+          #~ comma-separated arch list, so one jq pass turns it into a JSON
+          #~ object of family -> surviving setups.
+          #~
+          #~ A family named by the tag but pruned to zero (e.g.
+          #~ [runner:dragonflybsd#arm], where the only setup is x86_64) is a
+          #~ legitimate request, not a typo. It is dropped from `ready` so its
+          #~ job never starts, because a reusable workflow called with an
+          #~ empty matrix is a validation error rather than a skip. Warning
+          #~ here is the only place the user finds out nothing ran.
+          if [ -z "$TABLE_IN" ] || ! printf '%s' "$TABLE_IN" | jq -e . >/dev/null 2>&1; then
+            echo "::error::no valid setup table; pass one via the 'table' input or use the built-in default"
+            exit 1
+          fi
+
+          #~ jq only emits data here; every warning and error is raised in shell
+          #~ below, so nothing can leak into the parsed output.
+          MATRICES="$(jq -c --arg sel "$SELECT" --arg runner "$RUNNER" '
+            def canon:
+              ascii_downcase
+              | if   . == "x86-64" or . == "x86_64" or . == "x64" or . == "intel" or . == "amd64" then "x86_64"
+                elif . == "arm" or . == "arm64" or . == "aarch64" or . == "a64" then "aarch64"
+                elif . == "riscv" or . == "riscv64" or . == "r64" then "riscv64"
+                else . end;
+            ($sel | fromjson) as $selmap
+            | ($runner | split(" ") | map(select(. != ""))) as $want
+            | to_entries
+            | map(
+                .key as $fam
+                | ($selmap[$fam] // ""
+                   | split(",") | map(gsub("^\\s+|\\s+$"; "") | select(. != "") | canon)) as $archs
+                | {
+                    key: $fam,
+                    value: (
+                      if ($want | index($fam)) == null then []
+                      elif ($archs | length) == 0 then .value
+                      else [.value[] | (.arch | canon) as $a | select($archs | index($a) != null)]
+                      end
+                    )
+                  }
+              )
+            | from_entries
+          ' <<< "$TABLE_IN")"
+
+          #~ `ready` is the subset of selected families that still has at least
+          #~ one setup, padded exactly like RUNNER so the contains() gates match
+          #~ whole tokens. A family pruned to nothing is deliberately excluded:
+          #~ calling a reusable workflow with an empty matrix is a validation
+          #~ error, not a skip.
+          READY=''
+          for fam in $RUNNER; do
+            n="$(jq --arg f "$fam" '.[$f] | length' <<< "$MATRICES")"
+            if [ "$n" -gt 0 ]; then
+              READY="$READY $fam "
+            else
+              echo "::warning::[runner:$tag] selected '$fam' but no setup matches; nothing to run for it"
+            fi
+          done
+
+          #~ Cross-check: every family the tag named must have a key in the
+          #~ pruned matrix, whether or not it survived. A family missing from
+          #~ both would mean the run quietly does less than was asked, so fail
+          #~ loudly rather than publish a short run.
+          missing=''
+          for fam in $RUNNER; do
+            if [ "$(jq --arg f "$fam" 'has($f)' <<< "$MATRICES")" != true ]; then
+              missing="$missing $fam"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::families absent from the pruned matrix:$missing"
+            exit 1
+          fi
+
+          echo "runner=$RUNNER" >> "$GITHUB_OUTPUT"
+          echo "ready=$READY" >> "$GITHUB_OUTPUT"
+          echo "matrices=$MATRICES" >> "$GITHUB_OUTPUT"
+          echo "test_files=$test" >> "$GITHUB_OUTPUT"
+          echo "feed=$FEED" >> "$GITHUB_OUTPUT"
