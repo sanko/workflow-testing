@@ -8,14 +8,19 @@ page.
 
 The setups are declared once, as a default input on
 [`generate-matrix.yml`](.github/workflows/generate-matrix.yml).
-[`ci.yml`](.github/workflows/ci.yml) calls it, then dispatches to three
+[`ci.yml`](.github/workflows/ci.yml) calls it, then dispatches to three more
 reusable workflows:
 
 | Workflow | Purpose |
 |:--|:--|
+| [`generate-matrix.yml`](.github/workflows/generate-matrix.yml) | Works out what a commit asked for and prunes the setup table down to it. |
 | [`run-vm.yml`](.github/workflows/run-vm.yml) | Runs a setup inside a `vmactions` VM: FreeBSD, OpenBSD, NetBSD, DragonFly BSD, Solaris, OmniOS. |
 | [`run-direct.yml`](.github/workflows/run-direct.yml) | Runs a setup directly on a GitHub-hosted runner: Linux, macOS, Windows. |
 | [`results-summary.yml`](.github/workflows/results-summary.yml) | Collects every result artifact, renders the tables, emits `status.json`. |
+
+`generate-matrix.yml`, `run-vm.yml` and `run-direct.yml` are all
+`workflow_call`, so another repository can use them directly. See
+[Using the reusable workflows from another repository](#using-the-reusable-workflows-from-another-repository).
 
 ---
 
@@ -25,6 +30,7 @@ reusable workflows:
 - [Selecting what runs](#selecting-what-runs)
   - [`[runner:...]`](#runner)
   - [`[test:...]`](#test)
+  - [`[feed:...]`](#feed)
   - [Manual runs](#manual-runs)
   - [How a selection is applied](#how-a-selection-is-applied)
   - [Edge cases](#edge-cases)
@@ -92,8 +98,8 @@ workflow with no filtering at all.
 
 ## Selecting what runs
 
-Both tags are plain text in the commit message. For a pull request, the **PR
-title** is used, since the head commit's message is not available to
+All three tags are plain text in the commit message. For a pull request, the
+**PR title** is used, since the head commit's message is not available to
 `pull_request` events.
 
 <a name="runner"></a>
@@ -144,9 +150,30 @@ Note that the setups in this repository run `perl -V` as their task, so
 `$TEST_FILES` is currently inert here — it becomes live as soon as a task runs
 tests.
 
+<a name="feed"></a>
+### `[feed:...]`
+
+Asks for machine-readable copies of the results, in addition to the tables:
+
+```
+Fix the ARM VM boot hang [runner:linux#arm] [feed:json,rss]
+```
+
+| Tag | Result |
+|:--|:--|
+| `[feed:json]` | `feed.json` only. |
+| `[feed:rss]` | `feed.xml` only. |
+| `[feed:json,rss]` | Both. |
+| *(absent)* | Neither. Feeds are opt-in, so a default run uploads no extra artifact. |
+
+Unknown format names are warned about and dropped, so a typo cannot invent a
+filename. Unlike the other two tags this one does not change *which* setups run —
+it only changes what gets published at the end. See
+[Machine-readable feeds](#machine-readable-feeds) for the formats.
+
 ### Manual runs
 
-`workflow_dispatch` exposes the same two selectors as inputs, and they take
+`workflow_dispatch` exposes the same three selectors as inputs, and they take
 precedence over the commit message:
 
 ```yaml
@@ -159,6 +186,9 @@ on:
       test_files:
         default: ''
         type: string
+      feed:
+        default: ''
+        type: string
 ```
 
 Dispatching with `runner=openbsd#riscv,windows` and
@@ -169,14 +199,19 @@ Dispatching with `runner=openbsd#riscv,windows` and
 
 All of it happens in the one `setup` job inside
 [`generate-matrix.yml`](.github/workflows/generate-matrix.yml), so a filtered run
-never starts work it does not need. There are three outputs, and the distinction
-between the first two is what makes the report honest:
+never starts work it does not need. It has five outputs:
 
 | Output | Example | Meaning |
 |:--|:--|:--|
 | `runner` | `" linux macos "` | The families the tag *asked for*. Reported as *not selected*. |
 | `ready` | `" linux "` | Those families that still have at least one setup to run. |
 | `matrices` | `{"linux":[…],"macos":[]}` | The surviving setups, per family. |
+| `test_files` | `t/3000_jenny/*.t` | The test pattern, already filtered to glob characters. |
+| `feed` | `json,rss` | Which feeds to emit, if any. |
+
+The distinction between `runner` and `ready` is what makes the report honest:
+`runner` remembers what was asked for even when nothing survives to run, so a
+typo cannot quietly read as success.
 
 1. **Family gate** — every family job tests `ready` with `contains()`:
 
@@ -220,7 +255,7 @@ does not start that family, and the report shows `:x: no results reported`.
 | *(absent)* | Everything runs. |
 | `[runner:all]` | Everything runs. |
 | `[runner:]` | Everything runs. |
-| `[runner:plan9]` | Warning emitted, **everything runs** — an unknown family is treated as a typo, not as "run nothing". |
+| `[runner:plan9]` | Two warnings, and **everything runs** — an unknown family is treated as a typo, not as "run nothing". |
 | `[runner:linux#arm,linux#arm]` | One `aarch64` filter; the family appears once. |
 | `[runner:linux#sparc]` | Two warnings, and **nothing runs**. An unknown arch becomes a sentinel that matches no setup, so a typo fails closed instead of quietly running every Linux setup. |
 | `[runner:dragonflybsd#arm]` | The family is selected, but no setup in its matrix is `aarch64`, so the job is never started and the report shows `:x: no results reported`. |
@@ -320,12 +355,13 @@ when you just want a VM or a hosted runner and already know what to run:
 ```
 
 Whichever you pick, nothing in this repo has to be added to yours.
-This is a real trade-off, not an oversight. Selection used to happen in a `select`
-job *inside* the reusable workflow, so a caller only had to pass `select:` and
-pruning came for free — at the cost of one throwaway runner per family and nine
-`Family / Select setups` rows in every run's job list. It now happens once, in
-`setup`, which makes this repo's run list clean and cheap. External callers who
-want the tag behaviour pay for that in copy-paste.
+
+The second option is the older design and still works, but it costs more than it
+looks. Selection used to happen in a `select` job *inside* each reusable
+workflow, so a caller passed only `select:` and got pruning for free — at the
+price of one throwaway runner per family and nine `Family / Select setups` rows
+in every run's job list. Moving selection into a single shared `setup` job
+removed all of that, and is what makes the first option possible at all.
 
 Beyond the table fields, two inputs matter to a caller:
 
@@ -434,20 +470,23 @@ All the BSDs, nothing else                           [runner:freebsd,openbsd,net
 
 A family spans four places. For a new BSD, say:
 
-1. **`generate-matrix.yml`** — add a list under the family name in the `table`
-   default:
+1. **`generate-matrix.yml`** — add a line to the `table` default. The table is a
+   JSON object *keyed by family*, so the new family is one more `"name": [...]`
+   member on a line of its own, sitting between the existing ones:
 
-   ```json
-   "midnightbsd":[
-     {"platform_name":"midnightbsd","os":"midnightbsd","arch":"x86_64","toolchain":"gcc","prepare":"sudo mport install perl gcc"}
-   ]
    ```
+   "midnightbsd":[{"platform_name":"midnightbsd","os":"midnightbsd","arch":"x86_64","toolchain":"gcc","prepare":"sudo mport install perl gcc"}],
+   ```
+
+   Three things about that line are easy to get wrong: the family name is a
+   **quoted key**, not a nested object; it ends with a **comma** like every
+   family line but the last; and it is **one line**, because the whole table is
+   a folded YAML scalar and a newline inside a family would be folded into a
+   space and break the JSON.
 
    This is the family’s whole definition. `setup` prunes from this key, so a
    typo in the key name silently runs nothing — the key must match the gate in
-   step 2 exactly. Keep it on one line, as the surrounding families are: the
-   whole table is a folded YAML scalar, and a newline inside a family would be
-   folded into a space and break the JSON.
+   step 2 exactly.
 
 2. **`generate-matrix.yml`** — add the name to `FAMILIES`, and **`ci.yml`** —
    add a job that calls the reusable workflow, gated like the others:
@@ -643,22 +682,8 @@ artifact, and `publish-status` deploys it to the `gh-pages` branch under
 ### Machine-readable feeds
 
 The status page is a page for humans. To consume the same results from a script,
-a bot, or an RSS reader, tag the commit:
-
-```
-Fix the ARM VM boot hang [runner:linux#arm] [feed:json,rss]
-```
-
-| Tag | Result |
-|:--|:--|
-| `[feed:json]` | `feed.json` only. |
-| `[feed:rss]` | `feed.xml` only. |
-| `[feed:json,rss]` | Both. |
-| *(absent)* | Neither. Feeds are opt-in, so the default run uploads no extra artifact. |
-
-`workflow_dispatch` exposes the same choice as a `feed` input, and it overrides
-the commit tag, as `runner` and `test_files` do. Unknown format names are
-warned about and dropped, so a typo cannot invent a filename.
+a bot, or an RSS reader, ask for a feed with the
+[`[feed:…]` tag](#feed) or the `feed` dispatch input.
 
 `feed.json` is one object per run:
 
@@ -722,7 +747,7 @@ matter of pointing it at whichever label GitHub offers.
 
 - **A filtered run publishes a partial status page.** `status.json` only contains families that produced results, and `publish-status` overwrites the previous file (with `keep_files: true`, which preserves the site's *other* files, not the previous `status.json`). This is pre-existing behaviour, but it is much more visible now that filtered runs are easy to trigger — a filtered run on `main` will make unselected configurations disappear from the page.
 - **Unselected architectures are skipped, not failed.** The `setup` job prunes
-   built-in table before dispatch, so a `[runner:linux#arm]` commit never
-   starts the x86_64 Linux jobs. This costs one extra runner — `setup` itself,
-   which now prunes the table instead of doing nothing but string matching.
+  the built-in table before dispatch, so a `[runner:linux#arm]` commit never
+  starts the x86_64 Linux jobs. This costs one extra runner — `setup` itself,
+  which now prunes the table instead of doing nothing but string matching.
 - **Untrusted input is filtered twice.** Runner names are matched against a fixed list with `grep -qxF` (fixed-string, never a regex), and the test pattern is reduced to glob characters. Family and arch names are also canonicalised, so nothing from a commit message can reach a shell unfiltered.
