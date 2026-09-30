@@ -260,6 +260,22 @@ does not start that family, and the report shows `:x: no results reported`.
 | `[runner:linux#sparc]` | Two warnings, and **nothing runs**. An unknown arch becomes a sentinel that matches no setup, so a typo fails closed instead of quietly running every Linux setup. |
 | `[runner:dragonflybsd#arm]` | The family is selected, but no setup in its matrix is `aarch64`, so the job is never started and the report shows `:x: no results reported`. |
 
+A tag is recognised wherever it appears in the commit message, not just on a
+line of its own. A message that *writes about* tags is therefore read as though
+it *meant* them:
+
+```text
+Docs: explain the [runner:linux] tag and the [feed:json] output
+```
+
+That run logs `ignoring unknown runner 'linux'` (if `linux` is not in the
+caller's table) or silently enables the JSON feed, and then the commit itself
+trips the very tags it was describing. The fallbacks are safe — an unknown
+family still runs everything — but the warnings are real, so it is worth
+rewording a commit that mentions a tag rather than trying to escape it. There
+is no quoting that suppresses a tag, because the message is matched as plain
+text.
+
 ---
 
 ## The setups table
@@ -355,6 +371,95 @@ when you just want a VM or a hosted runner and already know what to run:
 ```
 
 Whichever you pick, nothing in this repo has to be added to yours.
+
+### A complete downstream example
+
+[`examples/downstream-ci.yml`](examples/downstream-ci.yml) is a whole `ci.yml`
+for a caller with its own portfolio: eleven families and 22 setups, two of the
+families (`haiku` and `wasm`) absent from the built-in table. It is the shape
+everything above adds up to, and it is linted and executed by the same checks as
+the real workflows, so it cannot drift from them unnoticed.
+
+The whole file comes down to four things.
+
+**1. One `setup` job, and the caller's own table.** Everything about selection
+lives in the reusable workflow; the table travels into it as a literal block
+scalar:
+
+```yaml
+  setup:
+    name: Generate Testing Matrix
+    uses: your-org/workflow-testing/.github/workflows/generate-matrix.yml@v1
+    with:
+      runner: '${{ github.event.inputs.runner }}'   # empty means "use the commit tag"
+      table: |
+        {
+          "omnios": [
+            {"platform_name":"omnios","os":"omnios","arch":"x86_64","toolchain":"gcc",
+             "configure":"-A'ccflags=-D__EXTENSIONS__ -fno-lto'"}
+          ],
+          "haiku": [
+            {"name":"Intel","platform_name":"haiku","os":"haiku","arch":"x86_64","toolchain":"gcc"}
+          ]
+        }
+```
+
+The families you can tag are the keys of *your* table, not a list fixed inside
+the reusable workflow. That is what makes `haiku` selectable above even though
+no built-in table has it. One family per line, each with a trailing comma.
+
+Write the table as a literal. The apostrophes in that `configure` are ordinary
+characters in a YAML file, which is exactly why they are safe there — and
+exactly why they must not be produced by an expression. Interpolating a table
+into the middle of a YAML document puts untrusted text where the parser is
+reading, and a single quote ends the file early. The reusable workflow applies
+`toJSON()` to the values it receives for the same reason.
+
+**2. One job per family, gated on `ready`.** The gate is the whole trick: a
+family pruned to nothing is absent from `ready`, so its job never starts and no
+reusable workflow is ever called with an empty matrix.
+
+```yaml
+  omnios:
+    name: OmniOS
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' omnios ') }}"
+    uses: your-org/workflow-testing/.github/workflows/run-vm.yml@v1
+    secrets: inherit
+    with:
+      os_version: 'r151050'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).omnios) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+```
+
+A family uses `run-vm.yml` to boot an image (`os_version` required) or
+`run-direct.yml` to take a hosted runner (no `os_version`; a wasm build, for
+instance, is a Linux direct job). Nothing else about the two differs.
+
+**3. A `results` job that depends on `setup` and every family.** It needs
+`setup` in `needs:` even though it wants no result from it, because
+`runner`, `test_files` and `feed` are read from `needs.setup.outputs`. A job
+that reads `needs.X` without depending on `X` is a validation error. Depending
+on the families is what lets the report say "not selected by runner filter"
+rather than reading an unstarted family as a silent failure:
+
+```yaml
+  results:
+    name: Results
+    if: always()
+    needs: [setup, dragonflybsd, freebsd, haiku, linux, macos,
+            netbsd, omnios, openbsd, solaris, wasm, windows]
+    uses: your-org/workflow-testing/.github/workflows/results-summary.yml@v1
+    with:
+      title: My Project CI Matrix
+      runner: "${{ needs.setup.outputs.runner }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
+      feed: "${{ needs.setup.outputs.feed }}"
+```
+
+**4. Nothing else.** There is no tag parsing, no `jq` and no selection logic in
+the caller's file, so there is no second copy of it to fall out of step.
 
 The second option is the older design and still works, but it costs more than it
 looks. Selection used to happen in a `select` job *inside* each reusable

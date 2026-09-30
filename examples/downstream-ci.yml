@@ -1,0 +1,286 @@
+name: CI Matrix
+
+on:
+  pull_request: ~
+  push: ~
+  schedule:
+    - cron: '42 5 * * 0'
+  #~ Manual runs may carry the same selectors as a commit tag, and win over it.
+  workflow_dispatch:
+    inputs:
+      runner:
+        default: all
+        description: 'Runners to execute, comma-separated (e.g. "freebsd,linux" or "linux#arm,openbsd#riscv"). See the [runner:...] tag below.'
+        type: string
+      test_files:
+        default: ''
+        description: 'Test file pattern to run (e.g. t/3000_jenny/3500_isolate/*.t). See the [test:...] tag below.'
+        type: string
+      feed:
+        default: ''
+        description: 'Machine-readable result feeds to emit alongside the tables: "json", "rss", or "json,rss". See the [feed:...] tag below.'
+        type: string
+
+#~ One run per ref. Two pushes in a row otherwise race to publish the same
+#~ artifacts and the older one wins the summary.
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}'
+
+permissions:
+  contents: read
+  #~ actions: read is required to list artifacts via the API.
+  actions: read
+
+jobs:
+
+  #~ Commit message filtering.
+  #~
+  #~ A commit message (or, for a pull request, the PR title) may carry tags:
+  #~
+  #~   [runner:freebsd,linux#arm]      only these OS families run
+  #~   [test:t/3000_jenny/*.t]         only this test pattern runs
+  #~   [feed:json,rss]                 also publish machine-readable feeds
+  #~
+  #~ Nothing in this file parses those. The reusable generate-matrix.yml does,
+  #~ and the table below travels into it, so this file is only the per-family
+  #~ wiring: which image to boot, what to run, and how the results are titled.
+  setup:
+    name: Generate Testing Matrix
+    uses: sanko/workflow-testing/.github/workflows/generate-matrix.yml@main
+    with:
+      #~ Empty means "no override", which leaves the commit message in charge.
+      runner: '${{ github.event.inputs.runner }}'
+      test_files: '${{ github.event.inputs.test_files }}'
+      feed: '${{ github.event.inputs.feed }}'
+      #~ Brocken's own portfolio, replacing the built-in table. Two of these
+      #~ families -- haiku and wasm -- are not in the built-in table at all, and
+      #~ become selectable because the family list is derived from these keys.
+      #~
+      #~ This is a literal block scalar on purpose. It is never produced by an
+      #~ expression, so the apostrophes in the omnios and solaris `configure`
+      #~ fields are just characters in a YAML file. Interpolating a table into
+      #~ this position would put untrusted text into the middle of a YAML
+      #~ document, which is how a single quote ends the file early.
+      #~
+      #~ One family per line, with a trailing comma. A line without its comma,
+      #~ or a family written as a bare object, is a JSON error that stops the
+      #~ run at this input before any job starts.
+      table: |
+        {
+          "dragonflybsd": [
+            {"name":"Intel","platform_name":"dragonflybsd","os":"dragonflybsd","arch":"x86_64","toolchain":"gcc","perl_version":"5.42.0","prepare":"pkg update && pkg upgrade -y && pkg install -y perl5 gcc gmake curl"}
+          ],
+          "freebsd": [
+            {"name":"Intel","platform_name":"freebsd","os":"freebsd","arch":"x86_64","toolchain":"gcc","prepare":"pkg install -y perl5 curl"},
+            {"name":"ARM","platform_name":"freebsd","os":"freebsd","arch":"aarch64","toolchain":"gcc","prepare":"pkg install -y perl5 curl"}
+          ],
+          "haiku": [
+            {"name":"Intel","platform_name":"haiku","os":"haiku","arch":"x86_64","toolchain":"gcc","prepare":"pkgman install -y cmd:gcc cmd:make cmd:curl cmd:wget cmd:perl"}
+          ],
+          "linux": [
+            {"name":"Intel [Ubuntu 26.04]","arch":"x86_64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-26.04","toolchain":"gcc"},
+            {"name":"Intel [Ubuntu 24.04]","arch":"x86_64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-24.04","toolchain":"gcc"},
+            {"name":"Intel [Ubuntu 22.04]","arch":"x86_64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-22.04","toolchain":"gcc"},
+            {"name":"ARM [Ubuntu 26.04]","arch":"aarch64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-26.04-arm","toolchain":"clang"},
+            {"name":"ARM [Ubuntu 24.04]","arch":"aarch64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-24.04-arm","toolchain":"clang"},
+            {"name":"ARM [Ubuntu 22.04]","arch":"aarch64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-22.04-arm","toolchain":"clang"},
+            {"name":"RISC-V [Ubuntu 24.04]","arch":"riscv64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-24.04-riscv","toolchain":"gcc"}
+          ],
+          "macos": [
+            {"name":"Apple Silicon","arch":"aarch64","perl_version":"5.42.0","variant":"default","platform_name":"macos","os":"macos-15","toolchain":"clang"},
+            {"name":"Intel","arch":"x86_64","perl_version":"5.42.0","variant":"default","platform_name":"macos","os":"macos-15-intel","toolchain":"clang"}
+          ],
+          "netbsd": [
+            {"name":"Intel","platform_name":"netbsd","os":"netbsd","arch":"x86_64","toolchain":"gcc","perl_version":"5.42.0","prepare":"export PKG_PATH=https://cdn.NetBSD.org/pub/pkgsrc/packages/NetBSD/$(uname -p)/10.1/All && /usr/sbin/pkg_add perl curl gmake"},
+            {"name":"ARM","platform_name":"netbsd","os":"netbsd","arch":"aarch64","toolchain":"gcc","perl_version":"5.42.0","prepare":"export PKG_PATH=https://cdn.NetBSD.org/pub/pkgsrc/packages/NetBSD/$(uname -p)/10.1/All && /usr/sbin/pkg_add perl curl gmake"}
+          ],
+          "omnios": [
+            {"platform_name":"omnios","os":"omnios","arch":"x86_64","toolchain":"gcc","perl_version":"5.42.0","configure":"-A'ccflags=-D__EXTENSIONS__ -fno-lto'","prepare":"pkg install -v --accept developer/gcc13 system/header developer/build/make web/curl"}
+          ],
+          "openbsd": [
+            {"name":"Intel","platform_name":"openbsd","os":"openbsd","arch":"x86_64","toolchain":"gcc","perl_version":"5.42.0","prepare":"pkg_add gmake curl"},
+            {"name":"ARM","platform_name":"openbsd","os":"openbsd","arch":"aarch64","toolchain":"gcc","perl_version":"5.42.0","prepare":"pkg_add gmake curl"}
+          ],
+          "solaris": [
+            {"platform_name":"solaris","os":"solaris","arch":"x86_64","toolchain":"gcc","perl_version":"5.42.0","configure":"-A'ccflags=-D__EXTENSIONS__'","prepare":"pkg install -v --accept perl-538 gcc developer/build/make bash web/curl"}
+          ],
+          "wasm": [
+            {"name":"Intel [Ubuntu 26.04]","arch":"x86_64","perl_version":"5.42.0","variant":"default","platform_name":"linux","os":"ubuntu-26.04","toolchain":"gcc","prepare":"curl -fsSL --retry 3 -o /tmp/wasmtime.tar.xz https://github.com/bytecodealliance/wasmtime/releases/download/v32.0.1/wasmtime-v32.0.1-x86_64-linux.tar.xz && sudo tar -xJf /tmp/wasmtime.tar.xz -C /usr/local/bin --strip-components=1 wasmtime-v32.0.1-x86_64-linux/wasmtime && rm -f /tmp/wasmtime.tar.xz && wasmtime --version"}
+          ],
+          "windows": [
+            {"name":"Intel","arch":"x86_64","platform_name":"windows","os":"windows-2022","variant":"5.42.3.1","prepare":"curl -sL -o /c/strawberry.zip https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases/download/SP_54231_64bit/strawberry-perl-5.42.3.1-64bit-portable.zip && rm -rf /c/Strawberry; powershell -NoProfile -Command Expand-Archive -Path C:/strawberry.zip -DestinationPath C:/Strawberry -Force -ErrorAction Stop; rm -f /c/strawberry.zip"},
+            {"name":"ARM","arch":"aarch64","platform_name":"windows","os":"windows-11-arm","variant":"5.42.3.1","prepare":"curl -sL -o /c/strawberry.zip https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases/download/SP_54231_64bit/strawberry-perl-5.42.3.1-64bit-portable.zip && rm -rf /c/Strawberry; powershell -NoProfile -Command Expand-Archive -Path C:/strawberry.zip -DestinationPath C:/Strawberry -Force -ErrorAction Stop; rm -f /c/strawberry.zip"}
+          ]
+        }
+
+  #~ Every family below is gated on its own name appearing in the padded `ready`
+  #~ list, which generate-matrix.yml builds after applying both the family and
+  #~ the arch filter. A family with no surviving setup is absent from `ready`, so
+  #~ an empty matrix is never handed to a reusable workflow.
+  #~
+  #~ A family may use either executor: the VM ones boot an image, the direct ones
+  #~ take a hosted runner. Which is which is the only real difference.
+
+  dragonflybsd:
+    name: DragonFly BSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' dragonflybsd ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-vm.yml@main
+    secrets: inherit
+    with:
+      os_version: '6.4.0'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).dragonflybsd) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  freebsd:
+    name: FreeBSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' freebsd ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-vm.yml@main
+    secrets: inherit
+    with:
+      os_version: '14.1'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).freebsd) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  #~ Not in the built-in table, and it does not need to be: haiku is selectable
+  #~ because it is a key of the table this repo passes, not because the reusable
+  #~ workflow was taught about it.
+  haiku:
+    name: Haiku
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' haiku ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-vm.yml@main
+    secrets: inherit
+    with:
+      os_version: 'r1beta6'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).haiku) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  linux:
+    name: Linux
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' linux ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-direct.yml@main
+    secrets: inherit
+    with:
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).linux) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  macos:
+    name: macOS
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' macos ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-direct.yml@main
+    secrets: inherit
+    with:
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).macos) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  netbsd:
+    name: NetBSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' netbsd ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-vm.yml@main
+    secrets: inherit
+    with:
+      os_version: '10.1'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).netbsd) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  omnios:
+    name: OmniOS
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' omnios ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-vm.yml@main
+    secrets: inherit
+    with:
+      os_version: 'r151050'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).omnios) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  openbsd:
+    name: OpenBSD
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' openbsd ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-vm.yml@main
+    secrets: inherit
+    with:
+      os_version: '7.8'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).openbsd) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  solaris:
+    name: Solaris
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' solaris ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-vm.yml@main
+    secrets: inherit
+    with:
+      os_version: '11.4'
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).solaris) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  #~ A wasm build on a hosted Linux runner, so this is a direct job, not a VM.
+  wasm:
+    name: Wasm
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' wasm ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-direct.yml@main
+    secrets: inherit
+    with:
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).wasm) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  windows:
+    name: Windows
+    needs: setup
+    if: "${{ contains(needs.setup.outputs.ready, ' windows ') }}"
+    uses: sanko/workflow-testing/.github/workflows/run-direct.yml@main
+    secrets: inherit
+    with:
+      task: 'perl -V'
+      matrix: ${{ toJSON(fromJSON(needs.setup.outputs.matrices).windows) }}
+      test_files: "${{ needs.setup.outputs.test_files }}"
+
+  #~ if: always(), so a summary is published even when every build failed.
+  #~
+  #~ `needs` lists setup as well as every family. setup is not here for its
+  #~ result but for its outputs: `runner`, `test_files` and `feed` all come
+  #~ from it, and a job that reads needs.X must depend on X. A family that
+  #~ never started is reported as "not selected" rather than silently missing.
+  results:
+    name: Results
+    if: always()
+    needs:
+      - setup
+      - dragonflybsd
+      - freebsd
+      - haiku
+      - linux
+      - macos
+      - netbsd
+      - omnios
+      - openbsd
+      - solaris
+      - wasm
+      - windows
+    uses: sanko/workflow-testing/.github/workflows/results-summary.yml@main
+    with:
+      title: Brocken CI Matrix
+      #~ These three let the report tell "filtered out of this run" apart from
+      #~ "selected and reported nothing". Without them every silent family reads
+      #~ as a failure.
+      runner: "${{ needs.setup.outputs.runner }}"
+      test_files: "${{ needs.setup.outputs.test_files }}"
+      feed: "${{ needs.setup.outputs.feed }}"

@@ -74,18 +74,58 @@ jobs:
         id: parse_tags
         shell: bash
         env:
-          #~ Double-quoted: an empty-string literal inside would terminate a
-          #~ single-quoted YAML string early and leave an unterminated
-          #~ expression, which fails workflow validation with no jobs at all.
-          COMMIT_MSG: "${{ github.event.head_commit.message || github.event.pull_request.title || '' }}"
-          DISPATCH_RUNNER: '${{ inputs.runner }}'
-          DISPATCH_TEST: '${{ inputs.test_files }}'
-          DISPATCH_FEED: '${{ inputs.feed }}'
-          TABLE_IN: '${{ inputs.table }}'
+          #~ toJSON, not quoting, because Actions substitutes `${{ }}`
+          #~ *textually* and the runner re-parses this file as YAML. A value
+          #~ carrying the character that delimits the expression would end the
+          #~ scalar early and fail the whole workflow with no jobs at all.
+          #~
+          #~ toJSON produces a single-line JSON string literal, so the quote
+          #~ character, a backslash and a newline all end up escaped and the
+          #~ result is always a valid YAML double-quoted scalar. This is what
+          #~ makes a caller-supplied `table` usable: a `configure` of
+          #~ -A'ccflags=-D__EXTENSIONS__' is an ordinary entry in an otherwise
+          #~ double-quoted JSON object, and a commit message that documents a
+          #~ tag in prose is often more than one line.
+          #~
+          #~ Quoting by hand (single, double or block scalars) is not enough.
+          #~ A block scalar looks safe but a substituted newline is inserted
+          #~ unindented, so it terminates the block and the rest of the file is
+          #~ parsed as garbage. A multi-line commit message is not hypothetical;
+          #~ it is every commit longer than the summary line.
+          COMMIT_MSG: ${{ toJSON(github.event.head_commit.message || github.event.pull_request.title || '') }}
+          DISPATCH_RUNNER: ${{ toJSON(inputs.runner) }}
+          DISPATCH_TEST: ${{ toJSON(inputs.test_files) }}
+          DISPATCH_FEED: ${{ toJSON(inputs.feed) }}
+          TABLE_IN: ${{ toJSON(inputs.table) }}
         run: |
-          #~ Job families, in report order. A tag selects whole families here;
-          #~ the arch part of a tag narrows the setups within them.
-          FAMILIES=(freebsd openbsd netbsd dragonflybsd solaris omnios linux macos windows)
+          #~ The table decides which families exist at all. Deriving the family
+          #~ list from it is what makes the `table` input worth having: a caller
+          #~ passing their own setups gets their own families selectable by tag,
+          #~ rather than only the ones this workflow happens to know by name.
+          if [ -z "$TABLE_IN" ] || ! printf '%s' "$TABLE_IN" \
+               | jq -e 'type == "object" and length > 0' >/dev/null 2>&1; then
+            echo "::error::no valid setup table; pass one via the 'table' input or use the built-in default"
+            exit 1
+          fi
+
+          #~ A tag selects whole families here; the arch part of a tag narrows
+          #~ the setups within them. KNOWN only fixes the order the families are
+          #~ emitted in — the order they appear in the report comes from
+          #~ results-summary.yml's `order` — so families a caller adds are
+          #~ appended rather than dropped. With the built-in table this is the
+          #~ previous hardcoded list, unchanged.
+          KNOWN=(freebsd openbsd netbsd dragonflybsd solaris omnios linux macos windows)
+          FAMILIES=()
+          for fam in "${KNOWN[@]}"; do
+            if jq -e --arg f "$fam" 'has($f)' <<< "$TABLE_IN" >/dev/null 2>&1; then
+              FAMILIES+=("$fam")
+            fi
+          done
+          while IFS= read -r fam; do
+            if ! printf '%s\n' "${FAMILIES[@]}" | grep -qxF -- "$fam"; then
+              FAMILIES+=("$fam")
+            fi
+          done < <(jq -r 'keys[]' <<< "$TABLE_IN")
 
           #~ Canonicalise the arch spelling accepted after `#`. Must agree with
           #~ the `arch` values in the table below, which is why the test suite
@@ -231,10 +271,6 @@ jobs:
           #~ job never starts, because a reusable workflow called with an
           #~ empty matrix is a validation error rather than a skip. Warning
           #~ here is the only place the user finds out nothing ran.
-          if [ -z "$TABLE_IN" ] || ! printf '%s' "$TABLE_IN" | jq -e . >/dev/null 2>&1; then
-            echo "::error::no valid setup table; pass one via the 'table' input or use the built-in default"
-            exit 1
-          fi
 
           #~ jq only emits data here; every warning and error is raised in shell
           #~ below, so nothing can leak into the parsed output.
