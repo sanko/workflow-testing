@@ -232,8 +232,27 @@ jobs:
             openbsd)       family='OpenBSD' ;;
             netbsd)        family='NetBSD' ;;
             dragonflybsd)  family='DragonFly BSD' ;;
+            midnightbsd)   family='MidnightBSD' ;;
             solaris)       family='Solaris' ;;
             omnios)        family='OmniOS' ;;
+            almalinux)     family='AlmaLinux' ;;
+            alpine)        family='Alpine' ;;
+            blissos)       family='BlissOS' ;;
+            debian)        family='Debian' ;;
+            ghostbsd)      family='GhostBSD' ;;
+            hardenedbsd)   family='HardenedBSD' ;;
+            hurd)          family='GNU/Hurd' ;;
+            nextbsd)       family='NextBSD' ;;
+            openeuler)     family='openEuler' ;;
+            openindiana)   family='OpenIndiana' ;;
+            opnsense)      family='OPNsense' ;;
+            plan9)         family='Plan 9' ;;
+            reactos)       family='ReactOS' ;;
+            redox)         family='Redox' ;;
+            riscos)        family='RISC OS' ;;
+            rockylinux)    family='Rocky Linux' ;;
+            tribblix)      family='Tribblix' ;;
+            ubuntu)        family='Ubuntu' ;;
             *)             family="${{ matrix.os }}" ;;
           esac
           case "${{ matrix.arch }}" in

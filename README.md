@@ -14,7 +14,7 @@ reusable workflows:
 | Workflow | Purpose |
 |:--|:--|
 | [`generate-matrix.yml`](.github/workflows/generate-matrix.yml) | Works out what a commit asked for and prunes the setup table down to it. |
-| [`run-vm.yml`](.github/workflows/run-vm.yml) | Runs a setup inside a `vmactions` VM: FreeBSD, OpenBSD, NetBSD, DragonFly BSD, Solaris, OmniOS. |
+| [`run-vm.yml`](.github/workflows/run-vm.yml) | Runs a setup inside a `vmactions` VM. Every OS that `vmactions` publishes a VM for is wired up; see [VM families](#vm-families). |
 | [`run-direct.yml`](.github/workflows/run-direct.yml) | Runs a setup directly on a GitHub-hosted runner: Linux, macOS, Windows. |
 | [`results-summary.yml`](.github/workflows/results-summary.yml) | Collects every result artifact, renders the tables, emits `status.json`. |
 
@@ -836,6 +836,53 @@ any of this.
 | `linux` | Linux | hosted | x86_64, aarch64, riscv64 | gcc, clang |
 | `macos` | macOS | hosted | x86_64, aarch64 | gcc, clang |
 | `windows` | Windows | hosted | x86_64, aarch64 | gcc, clang, msvc |
+
+### VM families
+
+`run-vm.yml` boots a `vmactions` VM for every OS that publishes one, so a setup
+table entry can name any of these keys. Only the families in the
+[table above](#families) are selected by this repo's own CI; the rest are wired up
+and waiting for a caller to ask for them.
+
+| Tag | Report name | Action | Images |
+|:--|:--|:--|:--|
+| `freebsd` | FreeBSD | `v1.5.2` | x86_64, aarch64, riscv64, powerpc64 |
+| `openbsd` | OpenBSD | `v1.4.5` | x86_64, aarch64, riscv64, sparc64 |
+| `netbsd` | NetBSD | `v1.4.5` | x86_64, aarch64, riscv64, sparc64 |
+| `dragonflybsd` | DragonFly BSD | `v1.3.1` | x86_64 |
+| `midnightbsd` | MidnightBSD | `v1.0.7` | x86_64 |
+| `solaris` | Solaris | `v1.3.8` | x86_64 |
+| `omnios` | OmniOS | `v1.3.4` | x86_64 |
+| `haiku` | Haiku | `v1.1.5` | x86_64 |
+| `almalinux` | AlmaLinux | `v1.0.1` | x86_64, aarch64, s390x, ppc64le |
+| `alpine` | Alpine | `v1.0.2` | x86_64, aarch64, riscv64 |
+| `blissos` | BlissOS | `v1.0.3` | x86_64 |
+| `debian` | Debian | `v1.0.1` | x86_64, aarch64, riscv64, ppc64le |
+| `ghostbsd` | GhostBSD | `v1.0.4` | x86_64 |
+| `hardenedbsd` | HardenedBSD | `v1.0.1` | x86_64 |
+| `hurd` | GNU/Hurd | `v1.0.2` | x86_64, i386 |
+| `nextbsd` | NextBSD | `v1.0.2` | x86_64, aarch64 |
+| `openeuler` | openEuler | `v1.0.3` | x86_64, aarch64, riscv64, loongarch64 |
+| `openindiana` | OpenIndiana | `v1.1.7` | x86_64 |
+| `opnsense` | OPNsense | `v1.0.1` | x86_64 |
+| `plan9` | Plan 9 | `v1.0.2` | x86_64 |
+| `reactos` | ReactOS | `v1.0.5` | i386 |
+| `redox` | Redox | `v1.0.2` | x86_64 |
+| `riscos` | RISC OS | `v1.0.2` | armv7 |
+| `rockylinux` | Rocky Linux | `v1.0.2` | x86_64, aarch64, s390x, ppc64le |
+| `tribblix` | Tribblix | `v1.0.6` | x86_64 |
+| `ubuntu` | Ubuntu | `v1.0.2` | x86_64, aarch64, riscv64, s390x, ppc64le |
+
+Two of these have no x86_64 image at all, so their steps take no `arch` and boot the
+only image that exists: `reactos` is i386 and `riscos` is armv7. Asking for
+`[runner:reactos#aarch64]` still boots i386, and the result records the arch that was
+asked for, so the Images column above is the one to trust. `s390x` and `ppc64le` are
+published by `almalinux`, `debian`, `rockylinux` and `ubuntu`, but `canon_arch` in
+`generate-matrix.yml` does not model them yet.
+
+Nothing in this repo's CI selects the families below `haiku`, so a green run here
+says the wiring parses, not that those guests work. Expect to fix a `prepare` command
+or two before a caller gets a clean first run on the less common ones.
 
 ### Hosted runners
 

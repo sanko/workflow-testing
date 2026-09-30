@@ -386,6 +386,51 @@ jobs:
             cat /tmp/parataxis-crash.log 2>/dev/null || true
             exit $para_task_status
 
+      - name: Build and Test in MidnightBSD
+        if: matrix.os == 'midnightbsd'
+        uses: vmactions/midnightbsd-vm@v1.0.7
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
       - name: Build and Test in Solaris
         if: matrix.os == 'solaris'
         uses: vmactions/solaris-vm@v1.3.8
@@ -521,6 +566,838 @@ jobs:
             cat /tmp/parataxis-crash.log 2>/dev/null || true
             exit $para_task_status
 
+      #~ vmactions publishes a VM for every OS in this list, so a setup in any
+      #~ of these families can be run without this repo owning a job for it:
+      #~ give the family's key as a table entry and the run below picks it up.
+      #~ None of them is in the built-in table, so none runs here by default.
+      #~ The run body is the shared one on purpose -- a guest that cannot
+      #~ satisfy it (no POSIX sh, no perl, a different package manager) is
+      #~ handled by the caller's `prepare` and `task`, not by a variant here.
+      #~ Arch: most of these publish an x86_64 image and nothing else, so
+      #~ matrix.arch has to stay x86_64 for them; the README's VM families
+      #~ table says which images each action has. ReactOS (i386) and RISC OS
+      #~ (armv7) are the other way round -- a single image that is not
+      #~ x86_64 -- so those two steps take no arch and run their only image.
+      #~ s390x and ppc64le, which AlmaLinux, Debian, Rocky Linux and Ubuntu
+      #~ also publish, are not modelled by canon_arch in
+      #~ generate-matrix.yml yet.
+
+      - name: Build and Test in AlmaLinux
+        if: matrix.os == 'almalinux'
+        uses: vmactions/almalinux-vm@v1.0.1
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in Alpine
+        if: matrix.os == 'alpine'
+        uses: vmactions/alpine-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in BlissOS
+        if: matrix.os == 'blissos'
+        uses: vmactions/blissos-vm@v1.0.3
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in Debian
+        if: matrix.os == 'debian'
+        uses: vmactions/debian-vm@v1.0.1
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in GhostBSD
+        if: matrix.os == 'ghostbsd'
+        uses: vmactions/ghostbsd-vm@v1.0.4
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in HardenedBSD
+        if: matrix.os == 'hardenedbsd'
+        uses: vmactions/hardenedbsd-vm@v1.0.1
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in GNU/Hurd
+        if: matrix.os == 'hurd'
+        uses: vmactions/hurd-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in NextBSD
+        if: matrix.os == 'nextbsd'
+        uses: vmactions/nextbsd-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in openEuler
+        if: matrix.os == 'openeuler'
+        uses: vmactions/openeuler-vm@v1.0.3
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in OpenIndiana
+        if: matrix.os == 'openindiana'
+        uses: vmactions/openindiana-vm@v1.1.7
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in OPNsense
+        if: matrix.os == 'opnsense'
+        uses: vmactions/opnsense-vm@v1.0.1
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in Plan 9
+        if: matrix.os == 'plan9'
+        uses: vmactions/plan9-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in ReactOS
+        if: matrix.os == 'reactos'
+        uses: vmactions/reactos-vm@v1.0.5
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          #~ The only image this action publishes is i386, so there is no arch
+          #~ to ask for here: passing matrix.arch would fail the boot. Callers
+          #~ wanting a 32-bit x86 run select this family and read x86_64 as
+          #~ i386.
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in Redox
+        if: matrix.os == 'redox'
+        uses: vmactions/redox-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in RISC OS
+        if: matrix.os == 'riscos'
+        uses: vmactions/riscos-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          #~ armv7 is the only image this action publishes, so there is no arch
+          #~ to ask for here: passing matrix.arch would fail the boot. Callers
+          #~ wanting a 32-bit ARM run select this family and read aarch64 as
+          #~ armv7.
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in Rocky Linux
+        if: matrix.os == 'rockylinux'
+        uses: vmactions/rockylinux-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in Tribblix
+        if: matrix.os == 'tribblix'
+        uses: vmactions/tribblix-vm@v1.0.6
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
+      - name: Build and Test in Ubuntu
+        if: matrix.os == 'ubuntu'
+        uses: vmactions/ubuntu-vm@v1.0.2
+        with:
+          release: ${{ inputs.os_version }}
+          usesh: true
+          arch: ${{ matrix.arch }}
+          prepare: ${{ matrix.prepare }}
+          run: |
+            #~ Build perl from source when the setup requests it. The shared
+            #~ workspace syncs .perl-version back to the host info step.
+            if [ -n '${{ matrix.perl_version }}' ]; then
+              if [ ! -x "$(pwd)/perl-dist/bin/perl" ]; then
+                . ./.ci-build-perl.sh
+                #~ Plain call + explicit status check: invoking the function
+                #~ inside `||`/`if` would suppress errexit inside it.
+                ci_build_perl '${{ matrix.perl_version }}' ${{ matrix.configure }}
+                status=$?
+                [ "$status" -eq 0 ] || exit 1
+              else
+                echo "Using cached source-built perl from perl-dist"
+              fi
+              PATH="$(pwd)/perl-dist/bin:$PATH"
+            fi
+            #~ Capture the perl version inside the VM for the host info step.
+            perl -e 'printf "%vd", $^V' > .perl-version 2>/dev/null || true
+            #~ A [test:...] tag narrows the suite; $TEST_FILES is honoured by
+            #~ ExtUtils::MakeMaker's test_harness. Inert for a task that does
+            #~ not run tests. Exported before the subshell below so the task
+            #~ inherits it.
+            ${{ inputs.test_files && format('export TEST_FILES={0};', inputs.test_files) || '' }}
+            #~ The task runs in a subshell with errexit re-enabled inside it:
+            #~ a failed task must not skip the report below, and its status is
+            #~ replayed so the job still fails the same way.
+            set +e
+            (
+              set -e
+              ${{ inputs.task || format('perl build.pl --compiler={0} coverage', matrix.toolchain) }}
+            )
+            para_task_status=$?
+            set -e
+            #~ Surface any in-VM crash report even when the task failed.
+            cat /tmp/parataxis-crash.log 2>/dev/null || true
+            exit $para_task_status
+
       #~ - name: Upload coverage reports to Codecov
         #~ uses: codecov/codecov-action@v5
         #~ with:
@@ -540,9 +1417,28 @@ jobs:
             openbsd)       family='OpenBSD' ;;
             netbsd)        family='NetBSD' ;;
             dragonflybsd)  family='DragonFly BSD' ;;
+            midnightbsd)   family='MidnightBSD' ;;
             solaris)       family='Solaris' ;;
             omnios)        family='OmniOS' ;;
             haiku)         family='Haiku' ;;
+            almalinux)     family='AlmaLinux' ;;
+            alpine)        family='Alpine' ;;
+            blissos)       family='BlissOS' ;;
+            debian)        family='Debian' ;;
+            ghostbsd)      family='GhostBSD' ;;
+            hardenedbsd)   family='HardenedBSD' ;;
+            hurd)          family='GNU/Hurd' ;;
+            nextbsd)       family='NextBSD' ;;
+            openeuler)     family='openEuler' ;;
+            openindiana)   family='OpenIndiana' ;;
+            opnsense)      family='OPNsense' ;;
+            plan9)         family='Plan 9' ;;
+            reactos)       family='ReactOS' ;;
+            redox)         family='Redox' ;;
+            riscos)        family='RISC OS' ;;
+            rockylinux)    family='Rocky Linux' ;;
+            tribblix)      family='Tribblix' ;;
+            ubuntu)        family='Ubuntu' ;;
             *)             family="${{ matrix.os }}" ;;
           esac
           case "${{ matrix.arch }}" in
