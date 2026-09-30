@@ -74,29 +74,19 @@ jobs:
         id: parse_tags
         shell: bash
         env:
-          #~ toJSON, not quoting, because Actions substitutes `${{ }}`
-          #~ *textually* and the runner re-parses this file as YAML. A value
-          #~ carrying the character that delimits the expression would end the
-          #~ scalar early and fail the whole workflow with no jobs at all.
+          #~ toJSON for the free-form text below: a commit message documents a
+          #~ tag in prose and is often more than one line, and encoding it
+          #~ escapes the quote, backslash and newline that would otherwise end
+          #~ the scalar early and fail the workflow with no jobs at all.
           #~
-          #~ toJSON produces a single-line JSON string literal, so the quote
-          #~ character, a backslash and a newline all end up escaped and the
-          #~ result is always a valid YAML double-quoted scalar. This is what
-          #~ makes a caller-supplied `table` usable: a `configure` of
-          #~ -A'ccflags=-D__EXTENSIONS__' is an ordinary entry in an otherwise
-          #~ double-quoted JSON object, and a commit message that documents a
-          #~ tag in prose is often more than one line.
-          #~
-          #~ Quoting by hand (single, double or block scalars) is not enough.
-          #~ A block scalar looks safe but a substituted newline is inserted
-          #~ unindented, so it terminates the block and the rest of the file is
-          #~ parsed as garbage. A multi-line commit message is not hypothetical;
-          #~ it is every commit longer than the summary line.
+          #~ `table` is not free-form text, it is JSON already, so it is passed
+          #~ through as-is: encoding it would hand jq a quoted string where every
+          #~ call below expects an object.
           COMMIT_MSG: ${{ toJSON(github.event.head_commit.message || github.event.pull_request.title || '') }}
           DISPATCH_RUNNER: ${{ toJSON(inputs.runner) }}
           DISPATCH_TEST: ${{ toJSON(inputs.test_files) }}
           DISPATCH_FEED: ${{ toJSON(inputs.feed) }}
-          TABLE_IN: ${{ toJSON(inputs.table) }}
+          TABLE_IN: '${{ inputs.table }}'
         run: |
           #~ The table decides which families exist at all. Deriving the family
           #~ list from it is what makes the `table` input worth having: a caller
