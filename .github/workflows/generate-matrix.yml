@@ -215,6 +215,16 @@ jobs:
             SELECT="{${json}}"
           }
 
+          #~ The dispatch inputs arrive JSON-encoded too (see the env block).
+          #~ Decode them before use: an unset input is then empty rather than
+          #~ the two characters `""`, which `-n` below would otherwise take
+          #~ for a real override and use to discard the commit tag, and a
+          #~ supplied value loses the surrounding quotes that would otherwise
+          #~ turn `linux#riscv` into the family `"linux`.
+          DISPATCH_RUNNER="$(printf '%s' "$DISPATCH_RUNNER" | jq -r . || true)"
+          DISPATCH_TEST="$(printf '%s' "$DISPATCH_TEST" | jq -r . || true)"
+          DISPATCH_FEED="$(printf '%s' "$DISPATCH_FEED" | jq -r . || true)"
+
           #~ Dispatch inputs win over the commit tag; an untagged commit runs
           #~ everything, so the default behaviour is an unfiltered run.
           tag="$(printf '%s' "$COMMIT_MSG" | grep -oP '\[runner:\K[^\]]*' || true)"
