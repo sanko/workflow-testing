@@ -277,7 +277,7 @@ jobs:
 
       - name: Build and Test in FreeBSD
         if: matrix.os == 'freebsd'
-        uses: vmactions/freebsd-vm@v1.5.2
+        uses: vmactions/freebsd-vm@v1.5.9
         with:
           release: ${{ inputs.os_version }}
           usesh: true
