@@ -287,7 +287,7 @@ jobs:
 
       - name: Build and Test in OpenBSD
         if: matrix.os == 'openbsd'
-        uses: vmactions/openbsd-vm@v1.4.5
+        uses: vmactions/openbsd-vm@v1.4.9
         with:
           release: ${{ inputs.os_version }}
           usesh: true
