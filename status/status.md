@@ -43,7 +43,7 @@
 ### NetBSD
 | Setup | Toolchain | Perl | Result |
 |:---|:---|:---|:---|
-| ARM | gcc | 5.42.3 | :white_check_mark: |
+| ARM | gcc | 5.44.0 | :white_check_mark: |
 | Intel | gcc | 5.44.0 | :white_check_mark: |
 ### DragonFly BSD
 | Setup | Toolchain | Perl | Result |
