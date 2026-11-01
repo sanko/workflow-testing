@@ -6,8 +6,8 @@
 | ARM | gcc | 5.38.2 | :white_check_mark: |
 | RISC-V | clang | 5.38.2 | :white_check_mark: |
 | RISC-V | gcc | 5.38.2 | :white_check_mark: |
-| Intel | clang | 5.38.2 | :white_check_mark: |
-| Intel | gcc | 5.38.2 | :white_check_mark: |
+| Intel | clang | 5.40.1 | :white_check_mark: |
+| Intel | gcc | 5.40.1 | :white_check_mark: |
 ### macOS
 | Setup | Toolchain | Perl | Result |
 |:---|:---|:---|:---|
