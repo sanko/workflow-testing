@@ -48,7 +48,7 @@
 ### DragonFly BSD
 | Setup | Toolchain | Perl | Result |
 |:---|:---|:---|:---|
-| Intel | gcc | 5.36.3 | :white_check_mark: |
+| Intel | gcc | 5.42.3 | :white_check_mark: |
 ### Solaris
 | Setup | Toolchain | Perl | Result |
 |:---|:---|:---|:---|
