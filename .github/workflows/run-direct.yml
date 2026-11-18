@@ -68,7 +68,7 @@ jobs:
       FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v7.0.1
         with:
           submodules: ${{ inputs.checkout_submodules }}
 
@@ -292,7 +292,7 @@ jobs:
 
       - name: Upload build status artifact
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: result-artifact-${{ env.FNAME }}
           path: |

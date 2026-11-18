@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all result artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: result-artifact-*
           path: results/
@@ -411,7 +411,7 @@ jobs:
         #~ refreshes on main, so the feed also gets a per-run artifact with a
         #~ longer life for anyone consuming runs directly.
         if: inputs.feed != ''
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: result-feed-${{ github.run_id }}
           path: status/feed.*
@@ -419,7 +419,7 @@ jobs:
           retention-days: 30
 
       - name: Upload status files
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: status-files
           path: status/

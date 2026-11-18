@@ -854,31 +854,31 @@ and waiting for a caller to ask for them.
 
 | Tag | Report name | Action | Images |
 |:--|:--|:--|:--|
-| `freebsd` | FreeBSD | `v1.5.2` | x86_64, aarch64, riscv64, powerpc64 |
-| `openbsd` | OpenBSD | `v1.4.5` | x86_64, aarch64, riscv64, sparc64 |
-| `netbsd` | NetBSD | `v1.4.5` | x86_64, aarch64, riscv64, sparc64 |
-| `dragonflybsd` | DragonFly BSD | `v1.3.1` | x86_64 |
-| `midnightbsd` | MidnightBSD | `v1.0.7` | x86_64 |
-| `solaris` | Solaris | `v1.3.8` | x86_64 |
-| `omnios` | OmniOS | `v1.3.4` | x86_64 |
-| `haiku` | Haiku | `v1.1.5` | x86_64 |
+| `freebsd` | FreeBSD | `v1.6.0` | x86_64, aarch64, riscv64, powerpc64 |
+| `openbsd` | OpenBSD | `v1.4.9` | x86_64, aarch64, riscv64, sparc64 |
+| `netbsd` | NetBSD | `v1.5.3` | x86_64, aarch64, riscv64, sparc64 |
+| `dragonflybsd` | DragonFly BSD | `v1.3.5` | x86_64 |
+| `midnightbsd` | MidnightBSD | `v1.0.8` | x86_64 |
+| `solaris` | Solaris | `v1.4.2` | x86_64 |
+| `omnios` | OmniOS | `v1.3.8` | x86_64 |
+| `haiku` | Haiku | `v1.1.6` | x86_64 |
 | `almalinux` | AlmaLinux | `v1.0.1` | x86_64, aarch64, s390x, ppc64le |
 | `alpine` | Alpine | `v1.0.2` | x86_64, aarch64, riscv64 |
 | `blissos` | BlissOS | `v1.0.3` | x86_64 |
 | `debian` | Debian | `v1.0.1` | x86_64, aarch64, riscv64, ppc64le |
-| `ghostbsd` | GhostBSD | `v1.0.4` | x86_64 |
+| `ghostbsd` | GhostBSD | `v1.0.5` | x86_64 |
 | `hardenedbsd` | HardenedBSD | `v1.0.1` | x86_64 |
 | `hurd` | Hurd | `v1.0.2` | x86_64, i386 |
 | `nextbsd` | NextBSD | `v1.0.2` | x86_64, aarch64 |
-| `openeuler` | openEuler | `v1.0.3` | x86_64, aarch64, riscv64, loongarch64 |
-| `openindiana` | OpenIndiana | `v1.1.7` | x86_64 |
+| `openeuler` | openEuler | `v1.0.4` | x86_64, aarch64, riscv64, loongarch64 |
+| `openindiana` | OpenIndiana | `v1.2.0` | x86_64 |
 | `opnsense` | OPNsense | `v1.0.1` | x86_64 |
 | `plan9` | Plan 9 | `v1.0.2` | x86_64 |
 | `reactos` | ReactOS | `v1.0.5` | i386 |
 | `redox` | Redox | `v1.0.2` | x86_64 |
-| `riscos` | RISC OS | `v1.0.2` | armv7 |
-| `rockylinux` | Rocky Linux | `v1.0.2` | x86_64, aarch64, s390x, ppc64le |
-| `tribblix` | Tribblix | `v1.0.6` | x86_64 |
+| `riscos` | RISC OS | `v1.0.3` | armv7 |
+| `rockylinux` | Rocky Linux | `v1.0.3` | x86_64, aarch64, s390x, ppc64le |
+| `tribblix` | Tribblix | `v1.0.7` | x86_64 |
 | `ubuntu` | Ubuntu | `v1.0.2` | x86_64, aarch64, riscv64, s390x, ppc64le |
 
 Two of these have no x86_64 image at all, so their steps take no `arch` and boot the

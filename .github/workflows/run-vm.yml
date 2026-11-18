@@ -86,7 +86,7 @@ jobs:
       FNAME: ${{ matrix.platform_name }}-${{ matrix.arch }}-${{ matrix.toolchain }}${{ matrix.perl_version && format('-v{0}', matrix.perl_version) || '' }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v7.0.1
         with:
           submodules: ${{ inputs.checkout_submodules }}
 
@@ -277,7 +277,7 @@ jobs:
 
       - name: Build and Test in FreeBSD
         if: matrix.os == 'freebsd'
-        uses: vmactions/freebsd-vm@v1.5.9
+        uses: vmactions/freebsd-vm@v1.6.0
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -297,7 +297,7 @@ jobs:
 
       - name: Build and Test in NetBSD
         if: matrix.os == 'netbsd'
-        uses: vmactions/netbsd-vm@v1.4.5
+        uses: vmactions/netbsd-vm@v1.5.3
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -307,7 +307,7 @@ jobs:
 
       - name: Build and Test in DragonflyBSD
         if: matrix.os == 'dragonflybsd'
-        uses: vmactions/dragonflybsd-vm@v1.3.1
+        uses: vmactions/dragonflybsd-vm@v1.3.5
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -317,7 +317,7 @@ jobs:
 
       - name: Build and Test in MidnightBSD
         if: matrix.os == 'midnightbsd'
-        uses: vmactions/midnightbsd-vm@v1.0.7
+        uses: vmactions/midnightbsd-vm@v1.0.8
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -327,7 +327,7 @@ jobs:
 
       - name: Build and Test in Solaris
         if: matrix.os == 'solaris'
-        uses: vmactions/solaris-vm@v1.3.8
+        uses: vmactions/solaris-vm@v1.4.2
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -337,7 +337,7 @@ jobs:
 
       - name: Build and Test in OmniOS
         if: matrix.os == 'omnios'
-        uses: vmactions/omnios-vm@v1.3.4
+        uses: vmactions/omnios-vm@v1.3.8
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -347,7 +347,7 @@ jobs:
 
       - name: Build and Test in Haiku
         if: matrix.os == 'haiku'
-        uses: vmactions/haiku-vm@v1.1.5
+        uses: vmactions/haiku-vm@v1.1.6
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -397,7 +397,7 @@ jobs:
 
       - name: Build and Test in GhostBSD
         if: matrix.os == 'ghostbsd'
-        uses: vmactions/ghostbsd-vm@v1.0.4
+        uses: vmactions/ghostbsd-vm@v1.0.5
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -437,7 +437,7 @@ jobs:
 
       - name: Build and Test in openEuler
         if: matrix.os == 'openeuler'
-        uses: vmactions/openeuler-vm@v1.0.3
+        uses: vmactions/openeuler-vm@v1.0.4
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -447,7 +447,7 @@ jobs:
 
       - name: Build and Test in OpenIndiana
         if: matrix.os == 'openindiana'
-        uses: vmactions/openindiana-vm@v1.1.7
+        uses: vmactions/openindiana-vm@v1.2.0
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -500,7 +500,7 @@ jobs:
 
       - name: Build and Test in RISC OS
         if: matrix.os == 'riscos'
-        uses: vmactions/riscos-vm@v1.0.2
+        uses: vmactions/riscos-vm@v1.0.3
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -513,7 +513,7 @@ jobs:
 
       - name: Build and Test in Rocky Linux
         if: matrix.os == 'rockylinux'
-        uses: vmactions/rockylinux-vm@v1.0.2
+        uses: vmactions/rockylinux-vm@v1.0.3
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -523,7 +523,7 @@ jobs:
 
       - name: Build and Test in Tribblix
         if: matrix.os == 'tribblix'
-        uses: vmactions/tribblix-vm@v1.0.6
+        uses: vmactions/tribblix-vm@v1.0.7
         with:
           release: ${{ inputs.os_version }}
           usesh: true
@@ -542,7 +542,7 @@ jobs:
           run: sh .vm-task.sh
 
       #~ - name: Upload coverage reports to Codecov
-        #~ uses: codecov/codecov-action@v5
+        #~ uses: codecov/codecov-action@v7.1.1
         #~ with:
           #~ token: ${{ secrets.CODECOV_TOKEN }}
           #~ root_dir: src
@@ -628,7 +628,7 @@ jobs:
 
       - name: Upload build status artifact
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: result-artifact-${{ env.FNAME }}
           path: |

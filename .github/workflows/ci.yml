@@ -199,14 +199,14 @@ jobs:
     steps:
       - name: Download status files
         #~ if: success() || failure()
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: status-files
           path: ./status
 
       - name: Deploy to GitHub Pages
         #~ if: success() || failure()
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./status
