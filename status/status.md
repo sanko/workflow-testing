@@ -29,7 +29,7 @@
 |:---|:---|:---|:---|
 | ARM | clang | 5.42.3 | :white_check_mark: |
 | ARM | gcc | 5.42.3 | :white_check_mark: |
-| Intel | clang | 5.42.3 | :white_check_mark: |
+| Intel | clang | 5.40.1 | :x: |
 | Intel | gcc | 5.42.3 | :white_check_mark: |
 ### OpenBSD
 | Setup | Toolchain | Perl | Result |

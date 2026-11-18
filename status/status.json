@@ -17,7 +17,7 @@
 "976d5440": {"name": "Intel", "status": "👍🏽 passing"},
 "441a1d40": {"name": "ARM", "status": "👍🏽 passing"},
 "21bac4cc": {"name": "ARM", "status": "👍🏽 passing"},
-"6ced67b8": {"name": "Intel", "status": "👍🏽 passing"},
+"6ced67b8": {"name": "Intel", "status": "👎🏽 failing"},
 "ab356d8d": {"name": "Intel", "status": "👍🏽 passing"},
 "844576a0": {"name": "ARM", "status": "👍🏽 passing"},
 "2d7a33a6": {"name": "ARM", "status": "👍🏽 passing"},
